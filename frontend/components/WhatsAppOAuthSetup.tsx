@@ -33,21 +33,111 @@ export function WhatsAppOAuthSetup({
   const [loadingWaba, setLoadingWaba] = useState(false);
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([]);
   const [loadingPhones, setLoadingPhones] = useState(false);
+  const [oauthStatus, setOauthStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [oauthMessage, setOauthMessage] = useState('');
 
-  // Step 1: Start WhatsApp Business onboarding flow (official Meta flow)
-  const handleStartOAuth = () => {
-    // Use official WhatsApp Business onboarding URL
-    const appId = '2094709584392829'; // Your Meta App ID
-    const configId = '930769915977028'; // Your onboarding config ID
-    const extras = JSON.stringify({
-      sessionInfoVersion: '3',
-      version: 'v4'
-    });
-
-    const onboardingUrl = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${appId}&config_id=${configId}&extras=${encodeURIComponent(extras)}`;
-
+  // ✅ Initialize Facebook SDK
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      window.location.href = onboardingUrl;
+      // Load FB SDK
+      (window as any).fbAsyncInit = function() {
+        (window as any).FB.init({
+          appId: '2094709584392829',
+          autoLogAppEvents: true,
+          xfbml: true,
+          version: 'v25.0'
+        });
+      };
+
+      // Load script if not already loaded
+      if (!(window as any).FB) {
+        const script = document.createElement('script');
+        script.src = 'https://connect.facebook.net/en_US/sdk.js';
+        script.async = true;
+        script.defer = true;
+        document.body.appendChild(script);
+      }
+
+      // ✅ Listen for embedded signup postMessage
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== 'https://www.facebook.com') return;
+
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'WA_EMBEDDED_SIGNUP') {
+            const { code } = data;
+
+            if (code) {
+              console.log('✅ Got OAuth code from Facebook:', code);
+              setOauthStatus('loading');
+              setOauthMessage('Exchanging code for token...');
+
+              try {
+                // Exchange code for token on our backend
+                const response = await axios.post(
+                  `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`,
+                  { code },
+                  {
+                    headers: {
+                      Authorization: `Bearer ${token}`
+                    }
+                  }
+                );
+
+                console.log('✅ OAuth successful:', response.data);
+                setOauthStatus('success');
+                setOauthMessage('✅ WhatsApp connected! Waiting for webhook...');
+
+                // Refresh connection data
+                setTimeout(() => {
+                  onConnectionUpdate();
+                }, 2000);
+              } catch (error: any) {
+                console.error('❌ Token exchange failed:', error);
+                setOauthStatus('error');
+                setOauthMessage(`Error: ${error.response?.data?.message || error.message}`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing message:', err);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, [token, onConnectionUpdate]);
+
+  // Step 1: Start embedded signup flow
+  const handleStartOAuth = () => {
+    const appId = '2094709584392829';
+    const configId = '930769915977028';
+    
+    if (typeof window !== 'undefined' && (window as any).FB) {
+      setOauthStatus('loading');
+      setOauthMessage('Opening WhatsApp onboarding...');
+
+      (window as any).FB.login(
+        function(response: any) {
+          console.log('FB.login response:', response);
+        },
+        { 
+          scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management'
+        }
+      );
+
+      // Also open embedded signup
+      const extras = {
+        sessionInfoVersion: '3',
+        version: 'v4'
+      };
+
+      const embeddedUrl = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${appId}&config_id=${configId}&extras=${encodeURIComponent(JSON.stringify(extras))}`;
+      
+      // Open in small window or redirect based on preference
+      window.location.href = embeddedUrl;
     }
   };
 
@@ -158,11 +248,46 @@ export function WhatsAppOAuthSetup({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={handleStartOAuth}
-          className="bg-green-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+          disabled={oauthStatus === 'loading'}
+          className="bg-green-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-green-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span>🔗</span>
-          Connect WhatsApp
+          <span>{oauthStatus === 'loading' ? '⏳' : '🔗'}</span>
+          {oauthStatus === 'loading' ? 'Connecting...' : 'Connect WhatsApp'}
         </motion.button>
+
+        {/* OAuth Status Messages */}
+        {oauthStatus === 'success' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-sm flex items-center gap-2"
+          >
+            <span>✅</span>
+            <span>{oauthMessage}</span>
+          </motion.div>
+        )}
+
+        {oauthStatus === 'error' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm flex items-center gap-2"
+          >
+            <span>❌</span>
+            <span>{oauthMessage}</span>
+          </motion.div>
+        )}
+
+        {oauthStatus === 'loading' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 p-3 bg-blue-100 text-blue-800 rounded-lg text-sm flex items-center gap-2"
+          >
+            <span>⏳</span>
+            <span>{oauthMessage}</span>
+          </motion.div>
+        )}
       </div>
 
       {/* Step 2: Select WABA */}

@@ -167,58 +167,13 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       console.warn('⚠️ Token verification failed (non-critical):', tokenError.message);
     }
 
-    // 3. ✅ FETCH WABA + PHONE DIRECTLY (NO WEBHOOK WAIT)
-    // Number might be already onboarded, so webhook won't come
-    // Instead, fetch directly from Graph API
-    console.log('🏢 ========== FETCHING WABA & PHONE DIRECTLY ==========');
+    // 3. ✅ OFFICIAL META ONBOARDING FLOW
+    // Meta handles WABA setup + phones on their end
+    // We just wait for webhook callback with WABA ID
+    console.log('🏢 ========== USING OFFICIAL META ONBOARDING ==========');
+    console.log('⏳ Waiting for Meta webhook with WABA setup...');
+    console.log('   (Meta will call our webhook when onboarding completes)');
     
-    let wabaId: string | null = null;
-    let phoneNumbers: any[] = [];
-
-    try {
-      // Fetch WABA ID
-      console.log('📊 Fetching WABA ID from Graph API...');
-      const wabaResponse = await axios.get(
-        `${GRAPH_API_URL}/me`,
-        {
-          params: {
-            fields: 'whatsapp_business_account',
-            access_token: access_token
-          }
-        }
-      );
-
-      wabaId = wabaResponse.data?.whatsapp_business_account?.id;
-      
-      if (!wabaId) {
-        console.warn('⚠️ No WABA ID found in response');
-        console.log('   Waiting for webhook to provide WABA ID...');
-      } else {
-        console.log('✅ WABA ID fetched:', wabaId);
-
-        // Fetch phone numbers
-        console.log('📱 Fetching phone numbers...');
-        const phoneResponse = await axios.get(
-          `${GRAPH_API_URL}/${wabaId}/phone_numbers`,
-          {
-            params: {
-              fields: 'id,phone_number,display_phone_number,quality_rating,name_status',
-              access_token: access_token
-            }
-          }
-        );
-
-        phoneNumbers = phoneResponse.data?.data || [];
-        console.log(`✅ Fetched ${phoneNumbers.length} phone number(s)`);
-        phoneNumbers.forEach((p, i) => {
-          console.log(`   ${i+1}. ${p.display_phone_number} (${p.quality_rating})`);
-        });
-      }
-    } catch (fetchError: any) {
-      console.warn('⚠️ Could not fetch WABA/phones directly:', fetchError.message);
-      console.log('   Will wait for webhook...');
-    }
-
     // Get user
     const user = await User.findById(userId);
     
@@ -238,11 +193,10 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       account = new Account({
         accountId: String(userId),
         userId: new (require('mongoose')).Types.ObjectId(userId),
-        wabaId: wabaId || undefined,
         metaSync: {
           accountId: String(userId),
           oauthAccessToken: access_token,
-          status: wabaId ? 'synced' : 'authorized',
+          status: 'authorized',
           oauth_timestamp: new Date()
         },
         status: 'active'
@@ -251,12 +205,11 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       console.log('✅ Account created');
     } else {
       console.log('📝 Updating existing Account...');
-      account.wabaId = wabaId || account.wabaId;
       account.metaSync = {
         ...(account.metaSync || {}),
         accountId: String(userId),
         oauthAccessToken: access_token,
-        status: wabaId ? 'synced' : 'authorized',
+        status: 'authorized',
         oauth_timestamp: new Date()
       };
       account.status = 'active';
@@ -264,74 +217,30 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       console.log('✅ Account updated');
     }
 
-    // ✅ CREATE phone number records if we got them
-    if (wabaId && phoneNumbers.length > 0) {
-      console.log('💾 Saving phone numbers to database...');
-      for (const phone of phoneNumbers) {
-        try {
-          const existing = await PhoneNumber.findOne({
-            accountId: String(userId),
-            phoneNumberId: phone.id
-          });
-
-          if (existing) {
-            console.log(`   ⚠️ Phone already exists: ${phone.display_phone_number}`);
-            continue;
-          }
-
-          const phoneRecord = new PhoneNumber({
-            accountId: String(userId),
-            phoneNumberId: phone.id,
-            wabaId,
-            displayPhoneNumber: phone.display_phone_number,
-            qualityRating: phone.quality_rating || 'UNKNOWN',
-            verifiedName: phone.name_status || 'Not verified',
-            isVerified: true,
-            verifiedAt: new Date(),
-            status: 'active'
-          });
-
-          await phoneRecord.save();
-          console.log(`   ✅ Phone saved: ${phone.display_phone_number}`);
-        } catch (phoneError: any) {
-          console.error(`   ❌ Error saving phone:`, phoneError.message);
-        }
-      }
-    }
-
-    // Also store OAuth token in User model (for status checks)
+    // Store OAuth token in User model
     (user as any).oauthAccessToken = access_token;
-    (user as any).oauthStatus = wabaId ? 'oauth_completed' : 'oauth_completed_awaiting_webhook';
-    (user as any).wabaId = wabaId || (user as any).wabaId;
+    (user as any).oauthStatus = 'oauth_completed_awaiting_webhook';
     (user as any).oauthTimestamp = new Date();
     await user.save();
 
-    const connectionStatus = wabaId ? '✅ CONNECTED' : '⏳ AWAITING WEBHOOK';
-    console.log(connectionStatus);
-    console.log('✅ OAuth complete - Account setup done');
+    console.log('⏳ WAITING FOR META WEBHOOK');
+    console.log('✅ OAuth complete - awaiting webhook...');
     console.log('================================================\n');
 
     // Return success response
     return res.json({
       success: true,
-      message: wabaId 
-        ? '✅ WhatsApp connected successfully!' 
-        : '⏳ OAuth successful! Waiting for account details...',
+      message: '⏳ OAuth successful! Waiting for Meta webhook...',
       userId: userId,
-      status: wabaId ? 'connected' : 'awaiting_webhook',
-      wabaId: wabaId || null,
-      phoneNumbers: phoneNumbers.length > 0 ? phoneNumbers : null,
-      nextSteps: wabaId 
-        ? [
-            '✅ Your WhatsApp Business Account is connected',
-            '✅ Phone numbers are synced',
-            'Ready to send messages!'
-          ]
-        : [
-            '1. Refresh this page',
-            '2. Your WhatsApp Business Account will appear once Meta sends webhook',
-            '3. Usually takes 10-30 seconds'
-          ]
+      status: 'awaiting_webhook',
+      wabaId: null,
+      phoneNumbers: null,
+      nextSteps: [
+        '✅ OAuth token saved',
+        '⏳ Waiting for Meta webhook with WABA details',
+        'Usually arrives within 30 seconds',
+        'We\'ll update your connection when it arrives'
+      ]
     });
 
   } catch (error: any) {
