@@ -34,23 +34,20 @@ export function WhatsAppOAuthSetup({
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([]);
   const [loadingPhones, setLoadingPhones] = useState(false);
 
-  // Step 1: Start OAuth flow
+  // Step 1: Start WhatsApp Business onboarding flow (official Meta flow)
   const handleStartOAuth = () => {
-    const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || '';
-    
-    if (!clientId) {
-      alert('WhatsApp Client ID not configured. Please check environment variables.');
-      console.error('NEXT_PUBLIC_WHATSAPP_CLIENT_ID is not set');
-      return;
-    }
+    // Use official WhatsApp Business onboarding URL
+    const appId = '2094709584392829'; // Your Meta App ID
+    const configId = '930769915977028'; // Your onboarding config ID
+    const extras = JSON.stringify({
+      sessionInfoVersion: '3',
+      version: 'v4'
+    });
 
-    const redirectUri = `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/auth/whatsapp/callback`;
-    const state = Buffer.from(JSON.stringify({ accountId: 'current' })).toString('base64');
-
-    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=whatsapp_business_management,whatsapp_business_messaging,business_management&state=${state}`;
+    const onboardingUrl = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${appId}&config_id=${configId}&extras=${encodeURIComponent(extras)}`;
 
     if (typeof window !== 'undefined') {
-      window.location.href = oauthUrl;
+      window.location.href = onboardingUrl;
     }
   };
 
