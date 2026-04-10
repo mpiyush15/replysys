@@ -118,7 +118,7 @@ export function LoginForm() {
       </motion.button>
 
       <p className="text-center text-mauve-600 text-sm font-light">
-        Don't have an account?{' '}
+        Don&apos;t have an account?{' '}
         <a href="#" className="text-mauve-700 hover:text-mauve-900 font-medium">
           Sign up
         </a>

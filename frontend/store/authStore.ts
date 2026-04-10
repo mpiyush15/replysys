@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { User, UserRole } from '@/types/roles';
+import { User, UserRole, UserRoleType } from '@/types/roles';
 
 interface AuthStore {
   user: User | null;
@@ -10,7 +10,7 @@ interface AuthStore {
   logout: () => void;
   setUser: (user: User) => void;
   hasPermission: (permission: string) => boolean;
-  isRole: (role: UserRole) => boolean;
+  isRole: (role: UserRoleType) => boolean;
   initializeFromStorage: () => void;
   checkTokenExpiration: () => boolean;
   setTokenExpiration: (expiresAt: number) => void;
@@ -58,7 +58,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     return permissions[permission as keyof typeof permissions] || false;
   },
 
-  isRole: (role: UserRole) => {
+  isRole: (role: UserRoleType) => {
     const { user } = get();
     return user?.role === role;
   },

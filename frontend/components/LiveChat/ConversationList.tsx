@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import { MdSearch } from 'react-icons/md';
@@ -32,13 +32,7 @@ export function ConversationList({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'REQUESTING' | 'INTERVENED'>('ACTIVE');
 
-  useEffect(() => {
-    if (token) {
-      fetchConversations();
-    }
-  }, [token]);
-
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(
@@ -53,7 +47,13 @@ export function ConversationList({
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchConversations();
+    }
+  }, [token, fetchConversations]);
 
   const filteredConversations = conversations.filter((conv) =>
     conv.contactName?.toLowerCase().includes(searchQuery.toLowerCase()) ||

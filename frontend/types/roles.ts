@@ -1,6 +1,7 @@
 // Role definitions - Synced with backend enums
 import { UserRole, UserRoleType } from './enums';
 
+export { UserRole };
 export type { UserRoleType };
 
 export interface User {

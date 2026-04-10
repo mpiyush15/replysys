@@ -258,7 +258,7 @@ export function WhatsAppOAuthSetup({
       {/* Status Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
         <p>
-          <strong>💡 Tip:</strong> Once connected, you'll be able to send messages to all numbers
+          <strong>💡 Tip:</strong> Once connected, you&apos;ll be able to send messages to all numbers
           registered in your WABA.
         </p>
       </div>

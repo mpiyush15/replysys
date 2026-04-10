@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import { MdClose } from 'react-icons/md';
@@ -24,13 +24,7 @@ export function WhatsAppSettingsModal({
   const [loadingWaba, setLoadingWaba] = useState(false);
   const [loadingPhones, setLoadingPhones] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && token) {
-      fetchWabaStatus();
-    }
-  }, [isOpen, token]);
-
-  const fetchWabaStatus = async () => {
+  const fetchWabaStatus = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(
@@ -47,7 +41,13 @@ export function WhatsAppSettingsModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (isOpen && token) {
+      fetchWabaStatus();
+    }
+  }, [isOpen, token, fetchWabaStatus]);
 
   const handleStartOAuth = () => {
     const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || '';
