@@ -22,6 +22,26 @@ function WhatsAppCallbackContent() {
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
 
+        // ✅ SEND MESSAGE TO OPENER WINDOW (for popup flow)
+        if (window.opener && window.opener !== window) {
+          window.opener.postMessage(
+            {
+              type: 'WA_OAUTH_COMPLETE',
+              code,
+              state,
+              error,
+              errorDescription
+            },
+            window.location.origin
+          );
+          
+          // Close popup
+          setTimeout(() => {
+            window.close();
+          }, 500);
+          return;
+        }
+
         // Check for OAuth error
         if (error) {
           console.error('OAuth Error:', error, errorDescription);

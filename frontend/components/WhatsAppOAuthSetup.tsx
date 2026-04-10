@@ -58,18 +58,26 @@ export function WhatsAppOAuthSetup({
         document.body.appendChild(script);
       }
 
-      // ✅ Listen for embedded signup postMessage
+      // ✅ Listen for postMessage from callback popup
       const handleMessage = async (event: MessageEvent) => {
-        if (event.origin !== 'https://www.facebook.com') return;
+        // Accept messages from callback page
+        if (!event.origin.includes(window.location.hostname)) return;
 
         try {
-          const data = JSON.parse(event.data);
+          const data = event.data;
           
-          if (data.type === 'WA_EMBEDDED_SIGNUP') {
-            const { code } = data;
+          if (data.type === 'WA_OAUTH_COMPLETE') {
+            const { code, error, errorDescription } = data;
+
+            if (error) {
+              console.error('OAuth Error:', error, errorDescription);
+              setOauthStatus('error');
+              setOauthMessage(`Authorization failed: ${errorDescription || error}`);
+              return;
+            }
 
             if (code) {
-              console.log('✅ Got OAuth code from Facebook:', code);
+              console.log('✅ Got OAuth code from callback:', code);
               setOauthStatus('loading');
               setOauthMessage('Exchanging code for token...');
 
