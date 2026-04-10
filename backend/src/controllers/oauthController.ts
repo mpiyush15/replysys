@@ -107,7 +107,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
     let tokenResponse;
     try {
       // Use GET request with params for token exchange
-      // NOTE: For Embedded Signup, do NOT include redirect_uri
+      // Include redirect_uri to match what frontend sent (required by Meta)
       console.log('🔄 Making GET request to Meta token endpoint...');
       tokenResponse = await axios.get(
         `${GRAPH_API_URL}/oauth/access_token`,
@@ -115,7 +115,8 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
           params: {
             client_id: process.env.META_APP_ID,
             client_secret: process.env.META_APP_SECRET,
-            code
+            code,
+            redirect_uri: 'https://replysys.com/auth/whatsapp/callback'
           }
         }
       );
