@@ -10,7 +10,7 @@ export default function UnauthorizedPage() {
           Access Denied
         </h1>
         <p className="text-lg text-mauve-600 mb-8">
-          You don't have permission to access this page
+          You don&apos;t have permission to access this page
         </p>
         <Link
           href="/"

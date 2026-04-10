@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 import { MdSend, MdAttachFile } from 'react-icons/md';
@@ -34,17 +34,7 @@ export function ChatThread({ token, selectedConversation }: ChatThreadProps) {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (selectedConversation?._id && token) {
-      fetchMessages();
-    }
-  }, [selectedConversation?._id, token]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     if (!selectedConversation?._id) return;
     try {
       setLoading(true);
@@ -60,7 +50,17 @@ export function ChatThread({ token, selectedConversation }: ChatThreadProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedConversation?._id, token]);
+
+  useEffect(() => {
+    if (selectedConversation?._id && token) {
+      fetchMessages();
+    }
+  }, [selectedConversation?._id, token, fetchMessages]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

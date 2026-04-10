@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { MdEdit, MdDelete } from 'react-icons/md';
 import axios from 'axios';
@@ -26,13 +26,7 @@ export function ContactDetailsView({
   const [conversations, setConversations] = useState<any[]>([]);
   const [loadingConvs, setLoadingConvs] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && contact?.id) {
-      fetchConversations();
-    }
-  }, [isOpen, contact?.id]);
-
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     if (!contact?.phoneNumber) return;
     
     setLoadingConvs(true);
@@ -50,7 +44,13 @@ export function ContactDetailsView({
     } finally {
       setLoadingConvs(false);
     }
-  };
+  }, [contact?.id, contact?.phoneNumber, token]);
+
+  useEffect(() => {
+    if (isOpen && contact?.id) {
+      fetchConversations();
+    }
+  }, [isOpen, contact?.id, fetchConversations]);
 
   return (
     <Modal

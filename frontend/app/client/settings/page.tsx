@@ -4,7 +4,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { MdCheckCircle, MdError, MdRefresh, MdLink } from 'react-icons/md';
 
@@ -21,7 +21,7 @@ export default function SettingsPage() {
     setIsClient(true);
   }, []);
 
-  const fetchWabaStatus = async () => {
+  const fetchWabaStatus = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(
@@ -37,7 +37,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (isClient && token) {
@@ -57,7 +57,7 @@ export default function SettingsPage() {
       
       return () => clearInterval(refreshInterval);
     }
-  }, [isClient, token]);
+  }, [isClient, token, fetchWabaStatus]);
 
   const handleConnectWhatsApp = () => {
     const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || '';

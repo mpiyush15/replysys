@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { MdAdd, MdUpload, MdRefresh } from 'react-icons/md';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -21,11 +21,7 @@ export default function ContactsPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
-  useEffect(() => {
-    fetchContacts();
-  }, []);
-
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
@@ -42,7 +38,11 @@ export default function ContactsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
 
   const handleDeleteContact = async (contact: any) => {
     if (!token) return;
