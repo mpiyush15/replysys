@@ -47,7 +47,7 @@ export function WhatsAppOAuthSetup({
     const redirectUri = `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/auth/whatsapp/callback`;
     const state = Buffer.from(JSON.stringify({ accountId: 'current' })).toString('base64');
 
-    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=whatsapp_business_messaging,whatsapp_business_management&state=${state}`;
+    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=whatsapp_business_management,whatsapp_business_messaging,business_management&state=${state}`;
 
     if (typeof window !== 'undefined') {
       window.location.href = oauthUrl;
