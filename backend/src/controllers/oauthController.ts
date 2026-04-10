@@ -181,7 +181,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
     console.log('⏳ Waiting for Meta webhook to provide WABA ID');
     console.log('   (Each client gets their OWN WABA, not a default one)');
 
-    // ⚠️ CRITICAL: Store access token so webhook handler can use it
+    // ⚠️ CRITICAL: Create Account record for webhook to match
     // Webhook will arrive with WABA ID and use this token to fetch phones
     const user = await User.findById(userId);
     
@@ -193,14 +193,46 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       });
     }
 
-    // Store OAuth token for webhook to use
+    // ✅ CREATE Account record with OAuth token
+    // Webhook will find Account by metaSync.accountId and retrieve the token
+    let account = await Account.findOne({ accountId: String(userId) });
+    
+    if (!account) {
+      console.log('📝 Creating new Account for webhook handler...');
+      account = new Account({
+        accountId: String(userId),
+        userId: new (require('mongoose')).Types.ObjectId(userId),
+        metaSync: {
+          accountId: String(userId),
+          oauthAccessToken: access_token,
+          status: 'pending',
+          oauth_timestamp: new Date()
+        },
+        status: 'pending'
+      });
+      await account.save();
+      console.log('✅ Account record created with OAuth token stored in metaSync.oauthAccessToken');
+    } else {
+      console.log('📝 Updating existing Account with OAuth token...');
+      account.metaSync = {
+        ...(account.metaSync || {}),
+        accountId: String(userId),
+        oauthAccessToken: access_token,
+        status: 'pending',
+        oauth_timestamp: new Date()
+      };
+      await account.save();
+      console.log('✅ Account record updated with new OAuth token');
+    }
+
+    // Also store OAuth token in User model (for status checks)
     (user as any).oauthAccessToken = access_token;
     (user as any).oauthStatus = 'oauth_completed_awaiting_webhook';
     (user as any).oauthTimestamp = new Date();
     await user.save();
 
     console.log('✅ Marked user as awaiting webhook');
-    console.log('✅ Stored OAuth accessToken for webhook handler');
+    console.log('✅ Stored OAuth accessToken in both User and Account for webhook handler');
     console.log('================================================\n');
 
     // Return immediately - let webhook handle everything
