@@ -16,6 +16,55 @@ const router = express.Router();
 router.post('/whatsapp', handleWhatsAppOAuth);
 
 /**
+ * GET /api/client/oauth/whatsapp/debug
+ * Debug: Check token permissions and WABA access
+ */
+router.get('/whatsapp/debug', async (req: any, res: any) => {
+  try {
+    const { Account, User } = require('../models');
+    const axios = require('axios');
+
+    const userId = req.userId;
+    const user = await User.findById(userId);
+    const account = await Account.findOne({ accountId: String(userId) });
+
+    if (!user || !account?.metaSync?.oauthAccessToken) {
+      return res.json({
+        status: 'error',
+        message: 'No OAuth token found',
+        user: !!user,
+        account: !!account,
+        token: !!account?.metaSync?.oauthAccessToken
+      });
+    }
+
+    const token = account.metaSync.oauthAccessToken;
+    const GRAPH_API_URL = 'https://graph.facebook.com/v21.0';
+
+    // Try to fetch WABA
+    const wabaResponse = await axios.get(`${GRAPH_API_URL}/me`, {
+      params: {
+        fields: 'whatsapp_business_account',
+        access_token: token
+      }
+    });
+
+    return res.json({
+      status: 'ok',
+      token_valid: true,
+      waba_response: wabaResponse.data,
+      wabaId: wabaResponse.data?.whatsapp_business_account?.id
+    });
+  } catch (error: any) {
+    return res.json({
+      status: 'error',
+      message: error.message,
+      error_response: error.response?.data
+    });
+  }
+});
+
+/**
  * GET /api/client/oauth/whatsapp/status
  * Get current WhatsApp connection status
  * Requires: JWT authentication (handled by parent router)

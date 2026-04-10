@@ -149,11 +149,12 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
 
     const { access_token } = tokenResponse.data;
     console.log('✅ Token exchanged successfully');
+    console.log('📌 Token:', access_token.substring(0, 20) + '...');
 
-    // 2. Verify token
-    console.log('🔐 Verifying token...');
+    // 2. Verify token + CHECK SCOPES
+    console.log('🔐 Verifying token and checking scopes...');
     try {
-      await axios.get(
+      const debugResponse = await axios.get(
         `${GRAPH_API_URL}/debug_token`,
         {
           params: {
@@ -162,9 +163,39 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
           }
         }
       );
+      
       console.log('✅ Token verified');
+      console.log('📋 Token Details:');
+      console.log('   App ID:', debugResponse.data?.data?.app_id);
+      console.log('   User ID:', debugResponse.data?.data?.user_id);
+      console.log('   Is Valid:', debugResponse.data?.data?.is_valid);
+      console.log('   Expires at:', debugResponse.data?.data?.expires_at);
+      
+      const scopes = debugResponse.data?.data?.scopes || [];
+      console.log('✅ SCOPES GRANTED:');
+      scopes.forEach((scope: string) => {
+        console.log(`   ✓ ${scope}`);
+      });
+      
+      // Check required scopes
+      const requiredScopes = [
+        'whatsapp_business_management',
+        'whatsapp_business_messaging',
+        'business_management'
+      ];
+      
+      const missingScopes = requiredScopes.filter(scope => !scopes.includes(scope));
+      if (missingScopes.length > 0) {
+        console.warn('⚠️ MISSING SCOPES:');
+        missingScopes.forEach(scope => {
+          console.warn(`   ❌ ${scope}`);
+        });
+      } else {
+        console.log('✅ All required scopes present!');
+      }
     } catch (tokenError: any) {
-      console.warn('⚠️ Token verification failed (non-critical):', tokenError.message);
+      console.warn('⚠️ Token verification failed:', tokenError.message);
+      console.warn('   Error:', tokenError.response?.data || tokenError.message);
     }
 
     // 3. ✅ DIRECT API FLOW - Fetch WABA + PHONES IMMEDIATELY
@@ -176,6 +207,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
     try {
       // Fetch WABA ID
       console.log('📊 Fetching WABA ID from Graph API...');
+      console.log('   URL:', `${GRAPH_API_URL}/me?fields=whatsapp_business_account`);
       const wabaResponse = await axios.get(
         `${GRAPH_API_URL}/me`,
         {
@@ -186,6 +218,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
         }
       );
 
+      console.log('✅ WABA Response:', JSON.stringify(wabaResponse.data, null, 2));
       wabaId = wabaResponse.data?.whatsapp_business_account?.id;
       
       if (wabaId) {
@@ -193,6 +226,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
 
         // Fetch phone numbers
         console.log('📱 Fetching phone numbers...');
+        console.log('   URL:', `${GRAPH_API_URL}/${wabaId}/phone_numbers`);
         const phoneResponse = await axios.get(
           `${GRAPH_API_URL}/${wabaId}/phone_numbers`,
           {
@@ -210,10 +244,22 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
         });
       } else {
         console.warn('⚠️ No WABA ID found in response');
+        console.log('   Full response:', JSON.stringify(wabaResponse.data, null, 2));
       }
     } catch (fetchError: any) {
-      console.warn('⚠️ Could not fetch WABA/phones:', fetchError.message);
-      console.log('   Will proceed without them (webhook can update later)');
+      console.error('❌ WABA FETCH FAILED');
+      console.error('   Error Code:', fetchError.response?.status);
+      console.error('   Error Message:', fetchError.response?.statusText);
+      console.error('   Error Details:', JSON.stringify(fetchError.response?.data, null, 2));
+      console.error('   Full Error:', fetchError.message);
+      
+      // Check if it's a permission error
+      if (fetchError.response?.status === 400) {
+        console.error('   👉 This is a PERMISSION ERROR (400)');
+        console.error('   Likely cause: Token missing whatsapp_business_management scope');
+      }
+      
+      console.warn('   Will proceed without WABA (webhook can update later)');
     }
 
     // Get user
@@ -333,6 +379,11 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('❌ OAuth error:', error.message);
+    
+    // Log detailed error for debugging
+    if (error.response?.data) {
+      console.error('Error details:', error.response.data);
+    }
 
     logConsistencyEvent('oauth_error', {
       userId: req.userId,
