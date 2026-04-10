@@ -205,10 +205,10 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
         metaSync: {
           accountId: String(userId),
           oauthAccessToken: access_token,
-          status: 'pending',
+          status: 'authorized',
           oauth_timestamp: new Date()
         },
-        status: 'pending'
+        status: 'active'
       });
       await account.save();
       console.log('✅ Account record created with OAuth token stored in metaSync.oauthAccessToken');
@@ -218,9 +218,10 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
         ...(account.metaSync || {}),
         accountId: String(userId),
         oauthAccessToken: access_token,
-        status: 'pending',
+        status: 'authorized',
         oauth_timestamp: new Date()
       };
+      account.status = 'active';
       await account.save();
       console.log('✅ Account record updated with new OAuth token');
     }
