@@ -45,9 +45,30 @@ export function WhatsAppSettingsModal({
 
   useEffect(() => {
     if (isOpen && token) {
-      fetchWabaStatus();
+      // Fetch status only when modal opens or token changes
+      // Don't include fetchWabaStatus in deps to avoid infinite loops
+      const performFetch = async () => {
+        try {
+          setLoading(true);
+          const response = await axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/status`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          setWabaConnection(response.data.data);
+          setStep('status');
+        } catch (error) {
+          console.error('Failed to fetch WABA status:', error);
+          setStep('connect');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      performFetch();
     }
-  }, [isOpen, token, fetchWabaStatus]);
+  }, [isOpen, token]);
 
   const handleStartOAuth = () => {
     const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || '';
