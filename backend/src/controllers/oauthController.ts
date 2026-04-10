@@ -198,68 +198,80 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       console.warn('   Error:', tokenError.response?.data || tokenError.message);
     }
 
-    // 3. ✅ DIRECT API FLOW - Fetch WABA + PHONES IMMEDIATELY
-    console.log('🏢 ========== DIRECT API FETCH (MVP APPROACH) ==========');
+    // 3. ✅ DIRECT API FLOW - BUSINESS-BASED APPROACH (CORRECT)
+    console.log('🏢 ========== BUSINESS-BASED WABA FETCH ==========');
     
     let wabaId: string | null = null;
     let phoneNumbers: any[] = [];
+    let businessId: string | null = null;
 
     try {
-      // Fetch WABA ID
-      console.log('📊 Fetching WABA ID from Graph API...');
-      console.log('   URL:', `${GRAPH_API_URL}/me?fields=whatsapp_business_account`);
-      const wabaResponse = await axios.get(
-        `${GRAPH_API_URL}/me`,
+      // STEP 1: Get business ID
+      console.log('📊 Step 1: Fetching business ID...');
+      const bizResponse = await axios.get(
+        `${GRAPH_API_URL}/me/businesses`,
         {
           params: {
-            fields: 'whatsapp_business_account',
             access_token: access_token
           }
         }
       );
 
-      console.log('✅ WABA Response:', JSON.stringify(wabaResponse.data, null, 2));
-      wabaId = wabaResponse.data?.whatsapp_business_account?.id;
+      console.log('✅ Business Response:', JSON.stringify(bizResponse.data, null, 2));
+      businessId = bizResponse.data?.data?.[0]?.id;
       
-      if (wabaId) {
-        console.log('✅ WABA ID fetched:', wabaId);
+      if (!businessId) {
+        console.warn('⚠️ No business found for this account');
+        console.log('   Full response:', JSON.stringify(bizResponse.data, null, 2));
+      } else {
+        console.log('✅ Business ID:', businessId);
 
-        // Fetch phone numbers
-        console.log('📱 Fetching phone numbers...');
-        console.log('   URL:', `${GRAPH_API_URL}/${wabaId}/phone_numbers`);
-        const phoneResponse = await axios.get(
-          `${GRAPH_API_URL}/${wabaId}/phone_numbers`,
+        // STEP 2: Get WABA from business
+        console.log('📱 Step 2: Fetching WABA from business...');
+        const wabaResponse = await axios.get(
+          `${GRAPH_API_URL}/${businessId}/owned_whatsapp_business_accounts`,
           {
             params: {
-              fields: 'id,phone_number,display_phone_number,quality_rating,name_status',
               access_token: access_token
             }
           }
         );
 
-        phoneNumbers = phoneResponse.data?.data || [];
-        console.log(`✅ Fetched ${phoneNumbers.length} phone number(s)`);
-        phoneNumbers.forEach((p, i) => {
-          console.log(`   ${i+1}. ${p.display_phone_number} (${p.quality_rating})`);
-        });
-      } else {
-        console.warn('⚠️ No WABA ID found in response');
-        console.log('   Full response:', JSON.stringify(wabaResponse.data, null, 2));
+        console.log('✅ WABA Response:', JSON.stringify(wabaResponse.data, null, 2));
+        wabaId = wabaResponse.data?.data?.[0]?.id;
+
+        if (!wabaId) {
+          console.warn('⚠️ No WABA found in business');
+        } else {
+          console.log('✅ WABA ID:', wabaId);
+
+          // STEP 3: Get phone numbers
+          console.log('📞 Step 3: Fetching phone numbers...');
+          const phoneResponse = await axios.get(
+            `${GRAPH_API_URL}/${wabaId}/phone_numbers`,
+            {
+              params: {
+                fields: 'id,phone_number,display_phone_number,quality_rating,name_status',
+                access_token: access_token
+              }
+            }
+          );
+
+          phoneNumbers = phoneResponse.data?.data || [];
+          console.log(`✅ Fetched ${phoneNumbers.length} phone number(s)`);
+          phoneNumbers.forEach((p, i) => {
+            console.log(`   ${i+1}. ${p.display_phone_number} (${p.quality_rating})`);
+          });
+        }
       }
     } catch (fetchError: any) {
-      console.error('❌ WABA FETCH FAILED');
+      console.error('❌ BUSINESS FLOW FAILED');
       console.error('   Error Code:', fetchError.response?.status);
       console.error('   Error Message:', fetchError.response?.statusText);
       console.error('   Error Details:', JSON.stringify(fetchError.response?.data, null, 2));
       console.error('   Full Error:', fetchError.message);
       
-      // Check if it's a permission error
-      if (fetchError.response?.status === 400) {
-        console.error('   👉 This is a PERMISSION ERROR (400)');
-        console.error('   Likely cause: Token missing whatsapp_business_management scope');
-      }
-      
-      console.warn('   Will proceed without WABA (webhook can update later)');
+      console.warn('   Proceeding without WABA/phones');
     }
 
     // Get user
