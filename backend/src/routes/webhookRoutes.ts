@@ -5,6 +5,27 @@ import { verifyWebhook, handleWebhook } from '../controllers/webhookController';
 const router = express.Router();
 
 /**
+ * Middleware: Capture raw body BEFORE JSON parsing
+ * Must run BEFORE express.json()
+ */
+const captureRawBody = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  let rawData = '';
+  
+  req.on('data', chunk => {
+    rawData += chunk;
+  });
+  
+  req.on('end', () => {
+    (req as any).rawBody = rawData;
+    next();
+  });
+};
+
+/**
  * Middleware: Validate X-Hub-Signature-256
  * Ensures webhook comes from Meta (not spoofed)
  */
@@ -21,7 +42,16 @@ const validateWebhookSignature = (
   }
 
   try {
-    const body = req.rawBody || JSON.stringify(req.body);
+    const rawBody = (req as any).rawBody;
+    
+    if (!rawBody || typeof rawBody !== 'string') {
+      console.error('❌ Raw body not available or invalid type:', typeof rawBody);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request body'
+      });
+    }
+
     const appSecret = process.env.META_APP_SECRET;
 
     if (!appSecret) {
@@ -35,7 +65,7 @@ const validateWebhookSignature = (
     // Calculate HMAC SHA256
     const hash = crypto
       .createHmac('sha256', appSecret)
-      .update(body)
+      .update(rawBody, 'utf8')
       .digest('hex');
 
     const expected = `sha256=${hash}`;
@@ -45,6 +75,8 @@ const validateWebhookSignature = (
       return next();
     } else {
       console.error('❌ Webhook signature INVALID');
+      console.error('   Expected:', expected);
+      console.error('   Received:', signature);
       return res.status(403).json({
         success: false,
         message: 'Invalid webhook signature'
@@ -59,20 +91,9 @@ const validateWebhookSignature = (
   }
 };
 
-/**
- * Middleware: Preserve raw body for signature validation
- */
-const preserveRawBody = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  req.rawBody = req.body;
-  next();
-};
-
+// Capture raw body BEFORE JSON parsing
+router.use(captureRawBody);
 router.use(express.json());
-router.use(preserveRawBody);
 
 /**
  * GET /api/webhooks/whatsapp
