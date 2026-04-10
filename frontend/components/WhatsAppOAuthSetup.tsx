@@ -119,25 +119,35 @@ export function WhatsAppOAuthSetup({
       setOauthStatus('loading');
       setOauthMessage('Opening WhatsApp onboarding...');
 
-      (window as any).FB.login(
-        function(response: any) {
-          console.log('FB.login response:', response);
-        },
-        { 
-          scope: 'whatsapp_business_management,whatsapp_business_messaging,business_management'
-        }
+      // Use FB.XFBML.parse to load embedded signup in modal
+      // This keeps user IN the app instead of redirecting
+      const embeddedSignupUrl = `https://www.facebook.com/v25.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent('https://replysys.com/auth/whatsapp/callback')}&scope=whatsapp_business_management,whatsapp_business_messaging,business_management&response_type=code`;
+      
+      // Open in popup instead of full redirect
+      const popup = window.open(
+        embeddedSignupUrl,
+        'Facebook Login',
+        'width=500,height=600'
       );
 
-      // Also open embedded signup
-      const extras = {
-        sessionInfoVersion: '3',
-        version: 'v4'
-      };
-
-      const embeddedUrl = `https://business.facebook.com/messaging/whatsapp/onboard/?app_id=${appId}&config_id=${configId}&extras=${encodeURIComponent(JSON.stringify(extras))}`;
-      
-      // Open in small window or redirect based on preference
-      window.location.href = embeddedUrl;
+      // Monitor popup for when it closes/completes
+      if (popup) {
+        const popupInterval = setInterval(() => {
+          try {
+            if (popup.closed) {
+              clearInterval(popupInterval);
+              setOauthStatus('idle');
+              setOauthMessage('');
+              // Refresh status to check if OAuth completed
+              setTimeout(() => {
+                onConnectionUpdate();
+              }, 1000);
+            }
+          } catch (e) {
+            // Ignore cross-origin errors
+          }
+        }, 500);
+      }
     }
   };
 
