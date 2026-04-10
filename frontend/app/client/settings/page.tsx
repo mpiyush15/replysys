@@ -43,23 +43,10 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (isClient && token) {
+      // Fetch initial status only once
       fetchWabaStatus();
-      
-      // Auto-refresh status every 5 seconds for 30 seconds after page load
-      // (in case webhook is processing)
-      let refreshCount = 0;
-      const refreshInterval = setInterval(() => {
-        refreshCount++;
-        if (refreshCount < 6) { // 6 * 5 seconds = 30 seconds
-          fetchWabaStatus();
-        } else {
-          clearInterval(refreshInterval);
-        }
-      }, 5000);
-      
-      return () => clearInterval(refreshInterval);
     }
-  }, [isClient, token, fetchWabaStatus]);
+  }, [isClient, token]);
 
   const handleConnectWhatsApp = () => {
     const clientId = process.env.NEXT_PUBLIC_WHATSAPP_CLIENT_ID || '';
