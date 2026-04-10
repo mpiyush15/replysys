@@ -95,12 +95,12 @@ export function WhatsAppOAuthSetup({
 
                 console.log('✅ OAuth successful:', response.data);
                 setOauthStatus('success');
-                setOauthMessage('✅ WhatsApp connected! Waiting for webhook...');
+                setOauthMessage('✅ WhatsApp connected successfully!');
 
-                // Refresh connection data
+                // Refresh connection data after short delay
                 setTimeout(() => {
                   onConnectionUpdate();
-                }, 2000);
+                }, 1500);
               } catch (error: any) {
                 console.error('❌ Token exchange failed:', error);
                 setOauthStatus('error');
