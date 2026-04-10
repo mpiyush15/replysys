@@ -4,10 +4,12 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import { useAuthStore } from '@/store/authStore';
 
 function WhatsAppCallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { initializeFromStorage } = useAuthStore();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Connecting WhatsApp...');
 
@@ -26,8 +28,9 @@ function WhatsAppCallbackContent() {
           setStatus('error');
           setMessage(`Authorization failed: ${errorDescription || error}`);
           
-          // Redirect back to settings after 3 seconds
+          // Restore session and redirect back to dashboard after 3 seconds
           setTimeout(() => {
+            initializeFromStorage();
             router.push('/client/dashboard');
           }, 3000);
           return;
@@ -40,6 +43,7 @@ function WhatsAppCallbackContent() {
           setMessage('No authorization code received. Please try again.');
           
           setTimeout(() => {
+            initializeFromStorage();
             router.push('/client/dashboard');
           }, 3000);
           return;
@@ -78,6 +82,9 @@ function WhatsAppCallbackContent() {
           setStatus('success');
           setMessage('✅ WhatsApp connected successfully!\n\nSyncing your business account details...');
           
+          // Restore session from localStorage to maintain auth state
+          initializeFromStorage();
+          
           // Wait for webhook to process (usually instant but can take up to 30 seconds)
           // Then redirect to settings to show the stored WABA ID and phone numbers
           setTimeout(() => {
@@ -95,15 +102,16 @@ function WhatsAppCallbackContent() {
           'Failed to connect WhatsApp. Please try again.'
         );
 
-        // Redirect back after 3 seconds
+        // Restore session and redirect back after 3 seconds
         setTimeout(() => {
+          initializeFromStorage();
           router.push('/client/dashboard');
         }, 3000);
       }
     };
 
     handleCallback();
-  }, [searchParams, router]);
+  }, [searchParams, router, initializeFromStorage]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
