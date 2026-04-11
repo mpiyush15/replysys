@@ -99,7 +99,7 @@ export function WhatsAppOAuthSetup({
             console.log('🚀 Calling connect endpoint...');
 
             try {
-              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/whatsapp/connect`;
+              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
               console.log('Backend URL:', backendUrl);
 
               const response = await axios.post(
