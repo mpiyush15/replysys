@@ -52,15 +52,23 @@ export function WhatsAppOAuthSetup({
       // ✅ Listen for postMessage from Embedded Signup
       const handleMessage = async (event: MessageEvent) => {
         console.log('📨 Message received from origin:', event.origin);
+        console.log('Full event data:', JSON.stringify(event.data));
         
-        if (event.origin !== 'https://www.facebook.com') {
-          console.log('❌ Wrong origin, ignoring');
+        // Accept messages from Facebook or same origin (for testing)
+        const isValidOrigin = event.origin === 'https://www.facebook.com' || 
+                              event.origin.includes('localhost') ||
+                              event.origin.includes('replysys.com');
+        
+        if (!isValidOrigin) {
+          console.log('❌ Wrong origin:', event.origin, '- ignoring');
           return;
         }
 
         try {
           const data = event.data;
-          console.log('📦 Message data:', data);
+          console.log('📦 Parsed message data:', data);
+          console.log('📊 Message type:', data?.type);
+
           
           // Meta sends data directly (not nested)
           if (data?.type === 'WA_EMBEDDED_SIGNUP') {
@@ -70,18 +78,20 @@ export function WhatsAppOAuthSetup({
             const wabaId = data?.waba_id;
             const phoneNumberId = data?.phone_number_id;
             const phoneNumber = data?.phone_number;
-            const code = data?.code;
+            
+            // 🔥 GET THE STORED CODE (THIS WAS MISSING!)
+            const code = (window as any).whatsappAuthCode;
 
             console.log('✅ Extracted values:');
             console.log('  wabaId:', wabaId);
             console.log('  phoneNumberId:', phoneNumberId);
             console.log('  phoneNumber:', phoneNumber);
-            console.log('  code:', code ? 'YES' : 'NO');
+            console.log('  code:', code ? 'YES (stored from FB.login)' : 'NO - MISSING!');
             console.log('  token:', token ? 'YES' : 'NO');
 
-            if (code) {
+            if (code && wabaId && phoneNumberId) {
               setSetupStep('connecting');
-              console.log('✅ State set to connecting');
+              console.log('✅ All data ready - calling backend!');
 
               try {
                 console.log('🔄 Sending OAuth code to backend...');
@@ -197,10 +207,22 @@ export function WhatsAppOAuthSetup({
   const handleStartOAuth = () => {
     if (typeof window !== 'undefined' && (window as any).FB) {
       setSetupStep('connecting');
+      console.log('🚀 Starting FB.login with Embedded Signup...');
 
       (window as any).FB.login(
         function(response: any) {
-          console.log('FB.login response:', response);
+          console.log('✅ FB.login response:', response);
+          console.log('   authResponse:', response?.authResponse);
+          
+          // 🔥 STORE THE CODE (THIS WAS MISSING!)
+          if (response?.authResponse?.code) {
+            const code = response.authResponse.code;
+            console.log('💾 Storing auth code:', code.substring(0, 20) + '...');
+            
+            // Store globally so FINISH event can access it
+            (window as any).whatsappAuthCode = code;
+            console.log('✅ Code stored in window.whatsappAuthCode');
+          }
         },
         { 
           config_id: '1239299391737840',
