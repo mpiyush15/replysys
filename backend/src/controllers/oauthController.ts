@@ -317,7 +317,8 @@ export const getWhatsAppStatus = async (req: Request, res: Response) => {
         ]
       }).lean();
 
-      accountId = account?.accountId || (account?._id ? String(account._id) : String(userId));
+      // Use Account._id as the primary accountId for querying PhoneNumbers
+      accountId = account?._id ? String(account._id) : String(userId);
     }
 
     console.log('📊 Using accountId:', accountId);
@@ -449,8 +450,9 @@ export const connectWhatsApp = async (req: Request, res: Response) => {
     console.log(`   phoneNumber: ${phoneNumber}`);
 
     // Get or create accountId
+    let account: any = null;
     if (!accountId) {
-      const account = await Account.findOne({ 
+      account = await Account.findOne({ 
         $or: [
           { userId },
           { accountId: userId }
@@ -464,7 +466,14 @@ export const connectWhatsApp = async (req: Request, res: Response) => {
         });
       }
 
-      accountId = account.accountId || String(account._id);
+      // Use Account._id as the primary accountId for PhoneNumber records
+      accountId = String(account._id);
+    } else {
+      // If accountId provided, fetch the account to ensure it exists
+      account = await Account.findOne({ accountId });
+      if (!account) {
+        account = await Account.findById(accountId);
+      }
     }
 
     console.log(`   accountId: ${accountId}`);
@@ -539,7 +548,7 @@ export const connectWhatsApp = async (req: Request, res: Response) => {
     console.log(`\n🏢 STEP 3: Updating account with WABA...`);
 
     await Account.updateOne(
-      { accountId: String(accountId) },
+      { _id: account._id },
       { 
         wabaId,
         metaSync: {
