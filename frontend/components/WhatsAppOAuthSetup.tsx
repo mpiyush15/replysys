@@ -25,21 +25,13 @@ export function WhatsAppOAuthSetup({
   token,
   onConnectionUpdate,
 }: WhatsAppOAuthSetupProps) {
-  const [step, setStep] = useState<'select-waba' | 'sync-phones' | 'ready'>(
-    wabaConnection?.status === 'connected' ? 'ready' : 'select-waba'
-  );
-  const [wabaList, setWabaList] = useState<any[]>([]);
-  const [selectedWaba, setSelectedWaba] = useState<string>('');
-  const [loadingWaba, setLoadingWaba] = useState(false);
-  const [phoneNumbers, setPhoneNumbers] = useState<any[]>([]);
-  const [loadingPhones, setLoadingPhones] = useState(false);
-  const [oauthStatus, setOauthStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [oauthMessage, setOauthMessage] = useState('');
+  const [setupStep, setSetupStep] = useState<'idle' | 'connecting' | 'polling' | 'connected'>('idle');
+  const [pollCount, setPollCount] = useState(0);
+  const MAX_POLLS = 30; // Poll for up to 60 seconds (30 * 2 seconds)
 
-  // ✅ Initialize Facebook SDK for Embedded Signup
+  // ✅ Initialize Facebook SDK
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Set up FB SDK
       (window as any).fbAsyncInit = function() {
         (window as any).FB.init({
           appId: '2094709584392829',
@@ -49,7 +41,6 @@ export function WhatsAppOAuthSetup({
         });
       };
 
-      // Load FB SDK if not already loaded
       if (!(window as any).FB) {
         const script = document.createElement('script');
         script.src = 'https://connect.facebook.net/en_US/sdk.js';
@@ -60,7 +51,6 @@ export function WhatsAppOAuthSetup({
 
       // ✅ Listen for postMessage from Embedded Signup
       const handleMessage = async (event: MessageEvent) => {
-        // Only accept messages from Facebook
         if (event.origin !== 'https://www.facebook.com') return;
 
         try {
@@ -69,18 +59,16 @@ export function WhatsAppOAuthSetup({
           if (data.type === 'WA_EMBEDDED_SIGNUP') {
             console.log('✅ Embedded Signup Complete:', data);
             
-            // Extract WABA + phone data from Meta
             const wabaId = data.data?.waba_id;
             const phoneNumberId = data.data?.phone_number_id;
             const phoneNumber = data.data?.phone_number;
             const code = data.data?.code;
 
             if (code) {
-              setOauthStatus('loading');
-              setOauthMessage('Saving WhatsApp setup...');
+              setSetupStep('connecting');
 
               try {
-                // Send code to backend (backend will exchange for token)
+                // Send code to backend
                 const response = await axios.post(
                   `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`,
                   { 
@@ -96,18 +84,14 @@ export function WhatsAppOAuthSetup({
                   }
                 );
 
-                console.log('✅ Setup saved:', response.data);
-                setOauthStatus('success');
-                setOauthMessage('✅ WhatsApp setup saved! Waiting for final webhook...');
-
-                // Refresh connection after delay
-                setTimeout(() => {
-                  onConnectionUpdate();
-                }, 2000);
+                console.log('✅ Backend saved OAuth:', response.data);
+                
+                // Start polling for webhook
+                setSetupStep('polling');
+                setPollCount(0);
               } catch (error: any) {
-                console.error('❌ Setup save failed:', error);
-                setOauthStatus('error');
-                setOauthMessage(`Error: ${error.response?.data?.message || error.message}`);
+                console.error('❌ Setup failed:', error);
+                setSetupStep('idle');
               }
             }
           }
@@ -119,74 +103,78 @@ export function WhatsAppOAuthSetup({
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
     }
-  }, [token, onConnectionUpdate]);
+  }, [token]);
 
-  // Step 1: Start Embedded Signup via FB.login
+  // ✅ Poll for status every 2 seconds when in polling state
+  useEffect(() => {
+    if (setupStep !== 'polling' || !token) return;
+
+    const pollInterval = setInterval(async () => {
+      setPollCount(prev => prev + 1);
+
+      try {
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/status`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        );
+
+        console.log('Status poll:', response.data);
+
+        // Check if webhook has arrived (status is now connected)
+        if (response.data?.data?.status === 'connected' && response.data?.data?.phoneNumbers?.length > 0) {
+          console.log('✅ Webhook received! Connection ready');
+          setSetupStep('connected');
+          clearInterval(pollInterval);
+          
+          // Refresh parent component
+          setTimeout(() => {
+            onConnectionUpdate();
+          }, 1000);
+        }
+      } catch (error: any) {
+        console.error('Poll failed:', error.response?.data || error.message);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Timeout after max polls
+    const timeoutId = setTimeout(() => {
+      if (pollCount >= MAX_POLLS) {
+        console.warn('⚠️ Polling timeout - webhook did not arrive');
+        clearInterval(pollInterval);
+        setSetupStep('idle');
+      }
+    }, MAX_POLLS * 2000);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(timeoutId);
+    };
+  }, [setupStep, token, pollCount, onConnectionUpdate]);
+
+  // ✅ Start Embedded Signup
   const handleStartOAuth = () => {
     if (typeof window !== 'undefined' && (window as any).FB) {
-      setOauthStatus('loading');
-      setOauthMessage('Opening WhatsApp onboarding...');
+      setSetupStep('connecting');
 
-      // Use FB.login with Embedded Signup config
       (window as any).FB.login(
         function(response: any) {
           console.log('FB.login response:', response);
-          // The postMessage listener will handle the actual signup flow
         },
         { 
-          config_id: '1239299391737840',  // ← Correct Embedded Signup config ID
+          config_id: '1239299391737840',
           response_type: 'code',
           override_default_response_type: true,
           extras: { version: 'v4' }
         }
       );
     } else {
-      setOauthStatus('error');
-      setOauthMessage('Facebook SDK not ready. Please refresh the page.');
+      console.error('Facebook SDK not ready');
     }
   };
 
-  // Step 2: Fetch available WABAs
-  const fetchWabas = async () => {
-    if (!token) return;
-    try {
-      setLoadingWaba(true);
-      const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/oauth/wabas`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setWabaList(response.data.data || []);
-    } catch (error: any) {
-      console.error('Failed to fetch WABAs:', error.response?.data || error.message);
-    } finally {
-      setLoadingWaba(false);
-    }
-  };
-
-  // Step 3: Sync phone numbers for selected WABA
-  const syncPhoneNumbers = async () => {
-    if (!token || !selectedWaba) return;
-    try {
-      setLoadingPhones(true);
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/oauth/sync-phones`,
-        { wabaId: selectedWaba },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setPhoneNumbers(response.data.data || []);
-      setStep('ready');
-      onConnectionUpdate();
-    } catch (error: any) {
-      console.error('Failed to sync phones:', error.response?.data || error.message);
-    } finally {
-      setLoadingPhones(false);
-    }
-  };
-
+  // ✅ Show connected state if already connected
   if (wabaConnection?.status === 'connected') {
     return (
       <motion.div
@@ -197,21 +185,13 @@ export function WhatsAppOAuthSetup({
         <div className="bg-green-50 border border-green-200 rounded-lg p-6">
           <h3 className="font-semibold text-green-900 mb-3">✅ WhatsApp Connected</h3>
           <div className="space-y-3 text-sm text-green-800">
-            <div>
-              <p className="font-medium">WABA ID:</p>
-              <p className="text-green-700">{wabaConnection.wabaId}</p>
-            </div>
             {wabaConnection.phoneNumbers && wabaConnection.phoneNumbers.length > 0 && (
               <div>
-                <p className="font-medium mb-2">Connected Phone Numbers:</p>
+                <p className="font-medium mb-2">Phone Numbers:</p>
                 <ul className="space-y-2">
                   {wabaConnection.phoneNumbers.map((phone) => (
-                    <li key={phone.id} className="flex items-center gap-2 text-green-700">
-                      <span>📱</span>
-                      <span>{phone.displayPhoneNumber}</span>
-                      <span className="text-xs bg-green-200 px-2 py-1 rounded">
-                        {phone.status}
-                      </span>
+                    <li key={phone.id} className="flex items-center gap-2">
+                      <span>📱 {phone.displayPhoneNumber}</span>
                     </li>
                   ))}
                 </ul>
@@ -219,176 +199,78 @@ export function WhatsAppOAuthSetup({
             )}
           </div>
         </div>
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setStep('select-waba')}
-          className="w-full bg-slate-900 text-white font-medium py-2 rounded-lg hover:bg-slate-800 transition border-2 border-slate-900"
-        >
-          Reconfigure
-        </motion.button>
       </motion.div>
     );
   }
 
+  // ✅ Show connecting/polling state
+  if (setupStep === 'connecting' || setupStep === 'polling') {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-6 p-6 bg-white rounded-lg border border-slate-200"
+      >
+        <div className="text-center">
+          <div className="inline-block">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              className="w-12 h-12 border-4 border-slate-300 border-t-slate-900 rounded-full"
+            />
+          </div>
+          <h3 className="font-semibold text-slate-900 mt-4">
+            {setupStep === 'connecting' ? 'Connecting WhatsApp...' : 'Waiting for webhook...'}
+          </h3>
+          <p className="text-slate-600 text-sm mt-2">
+            {setupStep === 'connecting' 
+              ? 'Complete onboarding on Meta'
+              : `Waiting for Meta to confirm (${pollCount}/${MAX_POLLS})`}
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ✅ Show connected after polling completes
+  if (setupStep === 'connected') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="space-y-4 p-6 bg-green-50 rounded-lg border border-green-200"
+      >
+        <div className="text-center">
+          <div className="text-4xl mb-3">✅</div>
+          <h3 className="font-semibold text-green-900">WhatsApp Connected!</h3>
+          <p className="text-green-700 text-sm mt-2">Your phone number is ready to use</p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ✅ Show initial state
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-6"
+      className="space-y-6 p-6 bg-white rounded-lg border border-slate-200"
     >
-      {/* Step 1: OAuth */}
-      <div className="border-l-4 border-slate-300 pl-6 py-4">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="flex-shrink-0 w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold">
-            1
-          </span>
-          <h3 className="font-semibold text-slate-900">Connect WhatsApp Account</h3>
-        </div>
-        <p className="text-slate-600 text-sm mb-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Connect WhatsApp Account</h2>
+        <p className="text-slate-600 text-sm">
           Click below to authorize Replysys to access your WhatsApp Business Account
         </p>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={handleStartOAuth}
-          disabled={oauthStatus === 'loading'}
-          className="bg-green-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-green-700 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <span>{oauthStatus === 'loading' ? '⏳' : '🔗'}</span>
-          {oauthStatus === 'loading' ? 'Connecting...' : 'Connect WhatsApp'}
-        </motion.button>
-
-        {/* OAuth Status Messages */}
-        {oauthStatus === 'success' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4 p-3 bg-green-100 text-green-800 rounded-lg text-sm flex items-center gap-2"
-          >
-            <span>✅</span>
-            <span>{oauthMessage}</span>
-          </motion.div>
-        )}
-
-        {oauthStatus === 'error' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4 p-3 bg-red-100 text-red-800 rounded-lg text-sm flex items-center gap-2"
-          >
-            <span>❌</span>
-            <span>{oauthMessage}</span>
-          </motion.div>
-        )}
-
-        {oauthStatus === 'loading' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4 p-3 bg-blue-100 text-blue-800 rounded-lg text-sm flex items-center gap-2"
-          >
-            <span>⏳</span>
-            <span>{oauthMessage}</span>
-          </motion.div>
-        )}
       </div>
 
-      {/* Step 2: Select WABA */}
-      {step !== 'select-waba' && (
-        <div className="border-l-4 border-slate-200 pl-6 py-4">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="flex-shrink-0 w-8 h-8 bg-slate-200 text-slate-600 rounded-full flex items-center justify-center font-bold">
-              2
-            </span>
-            <h3 className="font-semibold text-slate-900">Select Business Account</h3>
-          </div>
-          <p className="text-slate-600 text-sm">
-            Your WABA ID will be automatically selected
-          </p>
-        </div>
-      )}
-
-      {step === 'select-waba' && (
-        <div className="border-l-4 border-slate-900 pl-6 py-4">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="flex-shrink-0 w-8 h-8 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold">
-              2
-            </span>
-            <h3 className="font-semibold text-slate-900">Select Business Account</h3>
-          </div>
-          <p className="text-slate-600 text-sm mb-4">
-            Choose which WABA you want to connect
-          </p>
-
-          {!wabaList.length ? (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={fetchWabas}
-              disabled={loadingWaba}
-              className="bg-slate-900 text-white font-medium py-2 px-6 rounded-lg hover:bg-slate-800 transition disabled:opacity-50"
-            >
-              {loadingWaba ? 'Loading WABAs...' : 'Fetch Available WABAs'}
-            </motion.button>
-          ) : (
-            <div className="space-y-2">
-              {wabaList.map((waba) => (
-                <label
-                  key={waba.id}
-                  className="flex items-center gap-3 p-3 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-slate-900 transition"
-                >
-                  <input
-                    type="radio"
-                    name="waba"
-                    value={waba.id}
-                    checked={selectedWaba === waba.id}
-                    onChange={(e) => setSelectedWaba(e.target.value)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-slate-900 font-medium">{waba.name || waba.id}</span>
-                </label>
-              ))}
-
-              {selectedWaba && (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={syncPhoneNumbers}
-                  disabled={loadingPhones}
-                  className="w-full bg-slate-900 text-white font-medium py-2 rounded-lg hover:bg-slate-800 transition disabled:opacity-50 mt-4"
-                >
-                  {loadingPhones ? 'Syncing phones...' : 'Continue to Phone Sync'}
-                </motion.button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Step 3: Sync Phones (Automatic) */}
-      {step !== 'select-waba' && (
-        <div className="border-l-4 border-slate-200 pl-6 py-4">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="flex-shrink-0 w-8 h-8 bg-slate-200 text-slate-600 rounded-full flex items-center justify-center font-bold">
-              3
-            </span>
-            <h3 className="font-semibold text-slate-900">Sync Phone Numbers</h3>
-          </div>
-          <p className="text-slate-600 text-sm">
-            Your phone numbers are being synced automatically
-          </p>
-        </div>
-      )}
-
-      {/* Status Box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
-        <p>
-          <strong>💡 Tip:</strong> Once connected, you&apos;ll be able to send messages to all numbers
-          registered in your WABA.
-        </p>
-      </div>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={handleStartOAuth}
+        className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition"
+      >
+        Connect WhatsApp
+      </motion.button>
     </motion.div>
   );
 }

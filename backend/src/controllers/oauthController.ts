@@ -262,24 +262,32 @@ export const getWhatsAppStatus = async (req: Request, res: Response) => {
 
     console.log('📊 Fetching WhatsApp status for user:', userId);
 
-    const user = await User.findById(userId).lean();
+    // Get phone numbers from PhoneNumber collection (authority)
+    const phoneNumbers = await PhoneNumber.find({ 
+      accountId: String(userId),
+      status: { $ne: 'inactive' }
+    }).lean();
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    console.log(`✅ Found ${phoneNumbers.length} phone(s)`);
 
-    console.log('✅ Found WhatsApp connection data');
+    // Format response
+    const formattedPhones = phoneNumbers.map((phone: any) => ({
+      id: phone.phoneNumberId,
+      displayPhoneNumber: phone.displayPhoneNumber,
+      status: phone.status,
+      wabaId: phone.wabaId
+    }));
+
+    // Determine overall status
+    const status = phoneNumbers.length > 0 ? 'connected' : 'disconnected';
 
     return res.json({
       success: true,
       data: {
-        status: (user as any)?.whatsappStatus || WhatsAppConnectionStatus.DISCONNECTED,
-        connected: (user as any)?.wabaId ? true : false,
-        wabaId: (user as any)?.wabaId,
-        phoneNumbers: (user as any)?.whatsappPhone ? [{ displayPhoneNumber: (user as any).whatsappPhone }] : [],
+        status: status,
+        connected: phoneNumbers.length > 0,
+        phoneNumbers: formattedPhones,
+        wabaId: phoneNumbers[0]?.wabaId || null
       }
     });
   } catch (error: any) {
