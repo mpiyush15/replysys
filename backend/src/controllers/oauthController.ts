@@ -207,7 +207,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       account = new Account({
         accountId: String(userId),
         userId: new (require('mongoose')).Types.ObjectId(userId),
-        wabaId: finalWabaId,
+        wabaId: finalWabaId || '',
         metaSync: {
           accountId: String(userId),
           oauthAccessToken: access_token,
@@ -240,17 +240,17 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
 
         if (existing) {
           existing.displayPhoneNumber = finalPhoneNumber;
-          existing.wabaId = finalWabaId;
-          existing.status = 'active';  // ← Connected immediately after register
+          existing.wabaId = finalWabaId || existing.wabaId;
+          existing.status = 'active';
           await existing.save();
           console.log('✅ Phone updated as active');
         } else {
           const phoneRecord = new PhoneNumber({
             accountId: String(userId),
             phoneNumberId: finalPhoneId,
-            wabaId: finalWabaId,
+            wabaId: finalWabaId || '',
             displayPhoneNumber: finalPhoneNumber,
-            status: 'active'  // ← Connected immediately!
+            status: 'active'
           });
           await phoneRecord.save();
           console.log('✅ Phone saved as active');
