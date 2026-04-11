@@ -54,12 +54,20 @@ export function WhatsAppOAuthSetup({
   // 🔥 ATTACH MESSAGE LISTENER ONCE (STAYS ALIVE ALWAYS)
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      // LOG EVERYTHING to diagnose
+      console.log('📨 postMessage received:', {
+        origin: event.origin,
+        type: event.data?.type,
+        dataKeys: Object.keys(event.data || {})
+      });
+
       // ✅ Allow BOTH origins
       if (
         event.origin !== 'https://www.facebook.com' &&
         event.origin !== 'https://web.facebook.com'
       ) {
-        return;
+        console.log('⚠️ Origin check: allowing anyway for debugging');
+        // Don't return - let's see what's being sent
       }
 
       let data;
@@ -68,8 +76,11 @@ export function WhatsAppOAuthSetup({
           ? JSON.parse(event.data)
           : event.data;
       } catch (err) {
+        console.log('⚠️ Not JSON:', event.data);
         return;
       }
+
+      console.log('📦 Parsed data:', data);
 
       if (data?.type === 'WA_EMBEDDED_SIGNUP') {
         console.log('🔥 EVENT:', data.event);
@@ -84,7 +95,6 @@ export function WhatsAppOAuthSetup({
           console.log('Extracted:', { wabaId, phoneNumberId, phoneNumber });
 
           if (wabaId && phoneNumberId) {
-            // Call backend to register
             try {
               const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
               
