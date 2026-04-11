@@ -86,7 +86,7 @@ export default function MessagesPage() {
     try {
       setLoadingMessages(true);
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/conversations/${conversationId}/messages`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/messages/conversations/${conversationId}/messages`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
