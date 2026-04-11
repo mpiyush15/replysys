@@ -2,7 +2,8 @@ import express from 'express';
 import {
   handleWhatsAppOAuth,
   getWhatsAppStatus,
-  disconnectWhatsApp
+  disconnectWhatsApp,
+  connectWhatsApp
 } from '../controllers/oauthController';
 
 const router = express.Router();
@@ -78,5 +79,14 @@ router.get('/whatsapp/status', getWhatsAppStatus);
  * Requires: JWT authentication (handled by parent router)
  */
 router.post('/whatsapp/disconnect', disconnectWhatsApp);
+
+/**
+ * POST /api/client/whatsapp/connect
+ * Called AFTER Embedded Signup FINISH event
+ * Registers phone + saves to database
+ * Requires: JWT authentication (handled by parent router)
+ * Body: { phoneNumberId, wabaId, phoneNumber }
+ */
+router.post('/whatsapp/connect', connectWhatsApp);
 
 module.exports = router;

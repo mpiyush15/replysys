@@ -407,3 +407,154 @@ export const disconnectWhatsApp = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * POST /api/client/whatsapp/connect
+ * Called AFTER Embedded Signup FINISH event
+ * Registers phone number with Meta + saves to DB
+ * Body: { phoneNumberId, wabaId, phoneNumber }
+ */
+export const connectWhatsApp = async (req: Request, res: Response) => {
+  try {
+    const { phoneNumberId, wabaId, phoneNumber } = req.body;
+    const userId = (req as any).userId;
+    let accountId = (req as any).accountId;
+
+    // Validate inputs
+    if (!phoneNumberId || !wabaId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing phoneNumberId or wabaId'
+      });
+    }
+
+    console.log(`\n🔥 CONNECT WHATSAPP START`);
+    console.log(`   userId: ${userId}`);
+    console.log(`   phoneNumberId: ${phoneNumberId}`);
+    console.log(`   wabaId: ${wabaId}`);
+    console.log(`   phoneNumber: ${phoneNumber}`);
+
+    // Get or create accountId
+    if (!accountId) {
+      const account = await Account.findOne({ 
+        $or: [
+          { userId },
+          { accountId: userId }
+        ]
+      });
+
+      if (!account) {
+        return res.status(404).json({
+          success: false,
+          error: 'Account not found'
+        });
+      }
+
+      accountId = account._id || account.accountId;
+    }
+
+    console.log(`   accountId: ${accountId}`);
+
+    // 🔥 STEP 1: Register phone number with Meta
+    console.log(`\n📱 STEP 1: Registering phone with Meta...`);
+
+    const ACCESS_TOKEN = process.env.META_SYSTEM_TOKEN;
+
+    if (!ACCESS_TOKEN) {
+      console.error('❌ META_SYSTEM_TOKEN not configured');
+      return res.status(500).json({
+        success: false,
+        error: 'System not configured for WhatsApp registration'
+      });
+    }
+
+    try {
+      const registerResponse = await axios.post(
+        `${GRAPH_API_URL}/${phoneNumberId}/register`,
+        {
+          messaging_product: 'whatsapp',
+          pin: '000000'
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log(`✅ Phone registered with Meta`);
+      console.log(`   Response:`, registerResponse.data);
+    } catch (error: any) {
+      console.error(`❌ Registration failed:`, error.response?.data || error.message);
+      
+      // Check if already registered (acceptable error)
+      if (error.response?.data?.error?.code === 2200) {
+        console.log(`⚠️ Phone already registered (acceptable)`);
+      } else {
+        return res.status(error.response?.status || 500).json({
+          success: false,
+          error: error.response?.data?.error?.message || 'Phone registration failed',
+          details: error.response?.data?.error
+        });
+      }
+    }
+
+    // 🔥 STEP 2: Save to database
+    console.log(`\n💾 STEP 2: Saving to database...`);
+
+    const phoneNumberRecord = await PhoneNumber.findOneAndUpdate(
+      { accountId, phoneNumberId },
+      {
+        accountId,
+        phoneNumberId,
+        wabaId,
+        displayPhoneNumber: phoneNumber || '',
+        displayName: phoneNumber || '',
+        status: 'active',
+        isVerified: true,
+        verifiedAt: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(`✅ Saved to database`);
+    console.log(`   Record ID:`, phoneNumberRecord._id);
+
+    // 🔥 STEP 3: Update Account with WABA info
+    console.log(`\n🏢 STEP 3: Updating account with WABA...`);
+
+    await Account.updateOne(
+      { _id: accountId },
+      { 
+        wabaId,
+        metaSync: {
+          lastConnected: new Date(),
+          status: 'connected'
+        }
+      }
+    );
+
+    console.log(`✅ Account updated\n`);
+
+    // Success response
+    return res.json({
+      success: true,
+      status: 'connected',
+      phone: {
+        phoneNumberId,
+        wabaId,
+        displayPhoneNumber: phoneNumber,
+        status: 'active'
+      },
+      message: 'WhatsApp phone number connected successfully'
+    });
+
+  } catch (error: any) {
+    console.error('\n❌ CONNECT WHATSAPP ERROR:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to connect WhatsApp'
+    });
+  }
+};

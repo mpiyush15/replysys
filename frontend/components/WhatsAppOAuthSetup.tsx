@@ -89,27 +89,22 @@ export function WhatsAppOAuthSetup({
           const phoneNumberId = data?.data?.phone_number_id;
           const phoneNumber = data?.data?.phone_number;
 
-          // ✅ Get code stored from FB.login
-          const code = (window as any).whatsappAuthCode;
-
           console.log('✅ Extracted values:');
-          console.log('  code:', code ? code.substring(0, 20) + '...' : 'MISSING!');
           console.log('  wabaId:', wabaId);
           console.log('  phoneNumberId:', phoneNumberId);
           console.log('  phoneNumber:', phoneNumber);
 
-          if (code && wabaId && phoneNumberId) {
+          if (wabaId && phoneNumberId) {
             setSetupStep('connecting');
-            console.log('🚀 All data ready - calling backend!');
+            console.log('🚀 Calling connect endpoint...');
 
             try {
-              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`;
+              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/whatsapp/connect`;
               console.log('Backend URL:', backendUrl);
 
               const response = await axios.post(
                 backendUrl,
                 {
-                  code,
                   wabaId,
                   phoneNumberId,
                   phoneNumber
@@ -123,26 +118,25 @@ export function WhatsAppOAuthSetup({
 
               console.log('✅ Backend response:', response.data);
 
-              if (response.data?.status === 'connected') {
-                console.log('🎉 CONNECTED! Backend completed full flow');
+              if (response.data?.success) {
+                console.log('🎉 CONNECTED! Phone registered and saved');
                 setSetupStep('connected');
                 setTimeout(() => {
                   onConnectionUpdate();
-                }, 1000);
+                }, 1500);
               } else {
-                console.log('⏳ Starting polling for webhook...');
-                setSetupStep('polling');
-                setPollCount(0);
+                console.error('❌ Backend returned error:', response.data);
+                setSetupStep('idle');
               }
             } catch (error: any) {
-              console.error('❌ Backend call failed:', error.response?.data || error.message);
+              console.error('❌ Connect call failed:', error.response?.data || error.message);
               setSetupStep('idle');
             }
           } else {
             console.error('❌ Missing required data:');
-            console.error('  code:', !!code);
             console.error('  wabaId:', !!wabaId);
             console.error('  phoneNumberId:', !!phoneNumberId);
+            setSetupStep('idle');
           }
         }
       }
@@ -213,21 +207,13 @@ export function WhatsAppOAuthSetup({
 
       (window as any).FB.login(
         function (response: any) {
-          console.log('🔥 FULL FB.login response:', response);
+          console.log('✅ FB.login response:', response);
 
           if (response.authResponse) {
-            const code = response.authResponse.code;
-
-            console.log('🔥 CODE RECEIVED:', code);
-
-            if (!code) {
-              console.error('❌ NO CODE → WRONG CONFIG');
-              console.log('Full authResponse:', response.authResponse);
-              return;
-            }
-
-            (window as any).whatsappAuthCode = code;
-            console.log('💾 Code stored:', code.substring(0, 20) + '...');
+            console.log('✅ Auth success - waiting for FINISH event');
+          } else {
+            console.error('❌ FB.login failed:', response);
+            setSetupStep('idle');
           }
         },
         {
