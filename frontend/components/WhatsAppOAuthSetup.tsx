@@ -51,7 +51,27 @@ export function WhatsAppOAuthSetup({
     }
   }, []);
 
-  // 🔥 ATTACH MESSAGE LISTENER ONCE (STAYS ALIVE ALWAYS)
+  // 🔥 UNIVERSAL MESSAGE LISTENER - CATCH EVERYTHING
+  useEffect(() => {
+    const handleAllMessages = (event: MessageEvent) => {
+      // LOG EVERY MESSAGE REGARDLESS
+      console.log('📨 [ALL MESSAGES]', {
+        origin: event.origin,
+        type: typeof event.data,
+        dataLength: JSON.stringify(event.data).length,
+        data: event.data
+      });
+    };
+
+    window.addEventListener('message', handleAllMessages);
+    console.log('✅ Universal message listener attached');
+
+    return () => {
+      window.removeEventListener('message', handleAllMessages);
+    };
+  }, []);
+
+  // 🔥 ATTACH MESSAGE LISTENER FOR FINISH EVENT
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       let data;
@@ -65,7 +85,7 @@ export function WhatsAppOAuthSetup({
 
       // ✅ FINISH event
       if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.event === 'FINISH') {
-        console.log('✅ FINISH EVENT DETECTED');
+        console.log('🎉 FINISH EVENT DETECTED!');
         console.log('DATA:', JSON.stringify(data, null, 2));
 
         const wabaId = data?.data?.waba_id;

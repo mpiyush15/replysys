@@ -91,32 +91,21 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   initializeFromStorage: () => {
     if (typeof window !== 'undefined') {
-      // Check if token is expired
-      const tokenExpiresAt = localStorage.getItem('tokenExpiresAt');
-      if (tokenExpiresAt) {
-        const expiresAt = parseInt(tokenExpiresAt, 10);
-        const now = Date.now();
-
-        if (now > expiresAt) {
-          // Token expired, clear everything
-          localStorage.removeItem('user');
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('tokenExpiresAt');
-          set({ user: null, isAuthenticated: false });
-          return;
-        }
-      }
-
+      // Just restore from storage - don't check expiration on init
       const storedUser = localStorage.getItem('user');
-      if (storedUser) {
+      const storedToken = localStorage.getItem('authToken');
+      
+      if (storedUser && storedToken) {
         try {
           const user = JSON.parse(storedUser);
           set({ user, isAuthenticated: true });
+          console.log('✅ Auth restored from localStorage');
         } catch (error) {
           console.error('Failed to parse stored user:', error);
           localStorage.removeItem('user');
           localStorage.removeItem('authToken');
           localStorage.removeItem('tokenExpiresAt');
+          set({ user: null, isAuthenticated: false });
         }
       }
     }
