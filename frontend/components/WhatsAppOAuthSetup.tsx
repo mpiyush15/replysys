@@ -61,23 +61,23 @@ export function WhatsAppOAuthSetup({
         try {
           const data = event.data;
           console.log('📦 Message data:', data);
-          console.log('📦 Message type:', data?.data?.type);
           
-          if (data.data?.type === 'WA_EMBEDDED_SIGNUP') {
-            console.log('✅ WA_EMBEDDED_SIGNUP detected');
-            console.log('Full data object:', JSON.stringify(data, null, 2));
+          // Meta sends data directly (not nested)
+          if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+            console.log('✅ WA_EMBEDDED_SIGNUP detected!');
+            console.log('Full payload:', JSON.stringify(data, null, 2));
             
-            const wabaId = data.data?.waba_id;
-            const phoneNumberId = data.data?.phone_number_id;
-            const phoneNumber = data.data?.phone_number;
-            const code = data.data?.code;
+            const wabaId = data?.waba_id;
+            const phoneNumberId = data?.phone_number_id;
+            const phoneNumber = data?.phone_number;
+            const code = data?.code;
 
-            console.log('Extracted values:');
+            console.log('✅ Extracted values:');
             console.log('  wabaId:', wabaId);
             console.log('  phoneNumberId:', phoneNumberId);
             console.log('  phoneNumber:', phoneNumber);
-            console.log('  code:', code?.substring(0, 10) + '...');
-            console.log('  token:', token ? 'YES' : 'NO (⚠️ THIS IS THE PROBLEM!)');
+            console.log('  code:', code ? 'YES' : 'NO');
+            console.log('  token:', token ? 'YES' : 'NO');
 
             if (code) {
               setSetupStep('connecting');
@@ -105,10 +105,19 @@ export function WhatsAppOAuthSetup({
 
                 console.log('✅ Backend response:', response.data);
                 
-                // Start polling for webhook
-                setSetupStep('polling');
-                setPollCount(0);
-                console.log('✅ State set to polling');
+                // Check if already connected (backend did full flow + register)
+                if (response.data?.status === 'connected') {
+                  console.log('🎉 ALREADY CONNECTED! Backend completed full flow');
+                  setSetupStep('connected');
+                  setTimeout(() => {
+                    onConnectionUpdate();
+                  }, 1000);
+                } else {
+                  // Otherwise poll for webhook
+                  console.log('⏳ Starting polling for webhook...');
+                  setSetupStep('polling');
+                  setPollCount(0);
+                }
               } catch (error: any) {
                 console.error('❌ Backend call failed');
                 console.error('Status:', error.response?.status);
