@@ -48,112 +48,114 @@ export function WhatsAppOAuthSetup({
         script.defer = true;
         document.body.appendChild(script);
       }
+    }
+  }, []);
 
-      // ✅ Listen for postMessage from Embedded Signup
-      const handleMessage = async (event: MessageEvent) => {
-        console.log('📨 Message received from origin:', event.origin);
-        console.log('Full event data:', JSON.stringify(event.data));
-        
-        // Accept messages from Facebook or same origin (for testing)
-        const isValidOrigin = event.origin === 'https://www.facebook.com' || 
-                              event.origin.includes('localhost') ||
-                              event.origin.includes('replysys.com');
-        
-        if (!isValidOrigin) {
-          console.log('❌ Wrong origin:', event.origin, '- ignoring');
-          return;
-        }
+  // 🔥 ATTACH MESSAGE LISTENER BEFORE FB.login
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      console.log('📩 RAW EVENT:', event);
 
-        try {
-          const data = event.data;
-          console.log('📦 Parsed message data:', data);
-          console.log('📊 Message type:', data?.type);
+      // ✅ Allow BOTH origins (facebook.com and web.facebook.com)
+      if (
+        event.origin !== 'https://www.facebook.com' &&
+        event.origin !== 'https://web.facebook.com'
+      ) {
+        console.log('❌ Wrong origin, ignoring:', event.origin);
+        return;
+      }
 
-          
-          // Meta sends data directly (not nested)
-          if (data?.type === 'WA_EMBEDDED_SIGNUP') {
-            console.log('✅ WA_EMBEDDED_SIGNUP detected!');
-            console.log('Full payload:', JSON.stringify(data, null, 2));
-            
-            const wabaId = data?.waba_id;
-            const phoneNumberId = data?.phone_number_id;
-            const phoneNumber = data?.phone_number;
-            
-            // 🔥 GET THE STORED CODE (THIS WAS MISSING!)
-            const code = (window as any).whatsappAuthCode;
+      let data;
+      try {
+        // ✅ Handle BOTH string and object data
+        data = typeof event.data === 'string'
+          ? JSON.parse(event.data)
+          : event.data;
+      } catch (err) {
+        console.log('❌ Not valid JSON, skipping');
+        return;
+      }
 
-            console.log('✅ Extracted values:');
-            console.log('  wabaId:', wabaId);
-            console.log('  phoneNumberId:', phoneNumberId);
-            console.log('  phoneNumber:', phoneNumber);
-            console.log('  code:', code ? 'YES (stored from FB.login)' : 'NO - MISSING!');
-            console.log('  token:', token ? 'YES' : 'NO');
+      console.log('✅ PARSED:', data);
 
-            if (code && wabaId && phoneNumberId) {
-              setSetupStep('connecting');
-              console.log('✅ All data ready - calling backend!');
+      if (data?.type === 'WA_EMBEDDED_SIGNUP') {
+        console.log('🔥 EMBED EVENT:', data.event);
 
-              try {
-                console.log('🔄 Sending OAuth code to backend...');
-                const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`;
-                console.log('Backend URL:', backendUrl);
+        if (data.event === 'FINISH') {
+          console.log('🚀 FINISH RECEIVED');
 
-                const response = await axios.post(
-                  backendUrl,
-                  { 
-                    code,
-                    wabaId,
-                    phoneNumberId,
-                    phoneNumber
-                  },
-                  {
-                    headers: {
-                      Authorization: `Bearer ${token}`
-                    }
+          // ✅ Extract from nested data.data object
+          const wabaId = data?.data?.waba_id;
+          const phoneNumberId = data?.data?.phone_number_id;
+          const phoneNumber = data?.data?.phone_number;
+
+          // ✅ Get code stored from FB.login
+          const code = (window as any).whatsappAuthCode;
+
+          console.log('✅ Extracted values:');
+          console.log('  code:', code ? code.substring(0, 20) + '...' : 'MISSING!');
+          console.log('  wabaId:', wabaId);
+          console.log('  phoneNumberId:', phoneNumberId);
+          console.log('  phoneNumber:', phoneNumber);
+
+          if (code && wabaId && phoneNumberId) {
+            setSetupStep('connecting');
+            console.log('🚀 All data ready - calling backend!');
+
+            try {
+              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`;
+              console.log('Backend URL:', backendUrl);
+
+              const response = await axios.post(
+                backendUrl,
+                {
+                  code,
+                  wabaId,
+                  phoneNumberId,
+                  phoneNumber
+                },
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`
                   }
-                );
-
-                console.log('✅ Backend response:', response.data);
-                
-                // Check if already connected (backend did full flow + register)
-                if (response.data?.status === 'connected') {
-                  console.log('🎉 ALREADY CONNECTED! Backend completed full flow');
-                  setSetupStep('connected');
-                  setTimeout(() => {
-                    onConnectionUpdate();
-                  }, 1000);
-                } else {
-                  // Otherwise poll for webhook
-                  console.log('⏳ Starting polling for webhook...');
-                  setSetupStep('polling');
-                  setPollCount(0);
                 }
-              } catch (error: any) {
-                console.error('❌ Backend call failed');
-                console.error('Status:', error.response?.status);
-                console.error('Data:', error.response?.data);
-                console.error('Message:', error.message);
-                setSetupStep('idle');
+              );
+
+              console.log('✅ Backend response:', response.data);
+
+              if (response.data?.status === 'connected') {
+                console.log('🎉 CONNECTED! Backend completed full flow');
+                setSetupStep('connected');
+                setTimeout(() => {
+                  onConnectionUpdate();
+                }, 1000);
+              } else {
+                console.log('⏳ Starting polling for webhook...');
+                setSetupStep('polling');
+                setPollCount(0);
               }
-            } else {
-              console.error('❌ No code in data!');
+            } catch (error: any) {
+              console.error('❌ Backend call failed:', error.response?.data || error.message);
+              setSetupStep('idle');
             }
           } else {
-            console.log('⚠️ Different message type (not WA_EMBEDDED_SIGNUP):', data.type);
+            console.error('❌ Missing required data:');
+            console.error('  code:', !!code);
+            console.error('  wabaId:', !!wabaId);
+            console.error('  phoneNumberId:', !!phoneNumberId);
           }
-        } catch (err) {
-          console.error('❌ Error parsing message:', err);
         }
-      };
+      }
+    };
 
-      window.addEventListener('message', handleMessage);
-      console.log('✅ Message listener attached');
-      return () => {
-        window.removeEventListener('message', handleMessage);
-        console.log('✅ Message listener removed');
-      };
-    }
-  }, [token]);
+    window.addEventListener('message', handleMessage);
+    console.log('✅ Message listener attached');
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      console.log('✅ Message listener removed');
+    };
+  }, [token, onConnectionUpdate]);
 
   // ✅ Poll for status every 2 seconds when in polling state
   useEffect(() => {
@@ -211,24 +213,24 @@ export function WhatsAppOAuthSetup({
 
       (window as any).FB.login(
         function(response: any) {
-          console.log('✅ FB.login response:', response);
-          console.log('   authResponse:', response?.authResponse);
-          
-          // 🔥 STORE THE CODE (THIS WAS MISSING!)
-          if (response?.authResponse?.code) {
-            const code = response.authResponse.code;
-            console.log('💾 Storing auth code:', code.substring(0, 20) + '...');
-            
-            // Store globally so FINISH event can access it
+          console.log('FB.login response:', response);
+
+          if (response.authResponse) {
+            const code = response.authResponse.code; // ✅ MUST exist for code flow
+
+            console.log('🔥 CODE:', code);
+
+            // ✅ Store globally for FINISH event
             (window as any).whatsappAuthCode = code;
-            console.log('✅ Code stored in window.whatsappAuthCode');
+            console.log('💾 Code stored in window.whatsappAuthCode');
+          } else {
+            console.error('❌ No authResponse in FB.login response');
           }
         },
-        { 
+        {
           config_id: '1239299391737840',
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: { version: 'v4' }
+          response_type: 'code', // 🔥 CRITICAL
+          override_default_response_type: true // 🔥 CRITICAL
         }
       );
     } else {
