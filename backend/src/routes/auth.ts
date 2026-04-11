@@ -54,6 +54,7 @@ router.post('/login', async (req: Request, res: Response) => {
         userId: user._id.toString(),
         email: user.email,
         role: user.role,
+        accountId: user.accountId?.toString() || user._id.toString(),
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -132,6 +133,7 @@ router.post('/register', async (req: Request, res: Response) => {
         userId: newUser._id.toString(),
         email: newUser.email,
         role: newUser.role,
+        accountId: newUser.accountId?.toString() || newUser._id.toString(),
       },
       JWT_SECRET,
       { expiresIn: '7d' }
