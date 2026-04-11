@@ -61,9 +61,9 @@ export function WhatsAppOAuthSetup({
         try {
           const data = event.data;
           console.log('📦 Message data:', data);
-          console.log('📦 Message type:', data?.type);
+          console.log('📦 Message type:', data?.data?.type);
           
-          if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.data?.type === 'WA_EMBEDDED_SIGNUP') {
             console.log('✅ WA_EMBEDDED_SIGNUP detected');
             console.log('Full data object:', JSON.stringify(data, null, 2));
             
