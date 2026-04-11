@@ -20,8 +20,8 @@ export const requireClient = (req, res, next) => {
     });
   }
 
-  // Attach their userId to request for data isolation
-  req.userId = req.user.userId;
+  // Attach their userId to request for data isolation (use 'sub' from JWT)
+  req.userId = req.user.sub || req.user.userId;
 
   next();
 };

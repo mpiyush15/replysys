@@ -152,7 +152,19 @@ export const getConversations = async (req: Request, res: Response) => {
 
     console.log('📋 Fetching conversations:', { userId, accountId, status });
 
-    let query: any = { accountId };
+    // Get account - try both as _id and as accountId field
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found'
+      });
+    }
+
+    let query: any = { accountId: String(account._id) };
     if (status && status !== 'all') {
       query.status = status;
     }
@@ -196,10 +208,22 @@ export const getConversationMessages = async (req: Request, res: Response) => {
 
     console.log('💬 Fetching messages:', { userId, accountId, conversationId });
 
+    // Get account - try both as _id and as accountId field
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found'
+      });
+    }
+
     // Verify conversation belongs to this account
     const conversation = await Conversation.findOne({
       _id: conversationId,
-      accountId
+      accountId: String(account._id)
     });
 
     if (!conversation) {
@@ -211,7 +235,7 @@ export const getConversationMessages = async (req: Request, res: Response) => {
 
     const messages = await Message.find({
       conversationId,
-      accountId
+      accountId: String(account._id)
     })
       .sort({ sentAt: 1 })
       .limit(parseInt(limit as string))
@@ -264,10 +288,22 @@ export const sendConversationMessage = async (req: Request, res: Response) => {
       });
     }
 
+    // Get account - try both as _id and as accountId field
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found'
+      });
+    }
+
     // Verify conversation belongs to this account
     const conversation = await Conversation.findOne({
       _id: conversationId,
-      accountId
+      accountId: String(account._id)
     });
 
     if (!conversation) {
@@ -279,7 +315,7 @@ export const sendConversationMessage = async (req: Request, res: Response) => {
 
     // Verify phone number belongs to this account
     const phoneNumber = await PhoneNumber.findOne({
-      accountId: (req as any).accountId,
+      accountId: String(account._id),
       phoneNumberId: phoneNumberId || conversation.contactPhone
     });
 
