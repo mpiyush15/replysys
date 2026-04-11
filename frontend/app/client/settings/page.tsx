@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { MdCheckCircle, MdError, MdRefresh, MdLink } from 'react-icons/md';
+import { WhatsAppOAuthSetup } from '@/components/WhatsAppOAuthSetup';
 
 export default function SettingsPage() {
   const user = useAuthStore((state) => state.user);
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [showWhatsAppSetup, setShowWhatsAppSetup] = useState(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
 
@@ -49,14 +51,7 @@ export default function SettingsPage() {
   }, [isClient, token]);
 
   const handleConnectWhatsApp = () => {
-    // Embedded Signup will be triggered from WhatsAppOAuthSetup component modal
-    // This is just a placeholder - actual connection happens via Embedded Signup
-    if (typeof window === 'undefined') return;
-    
-    console.log('Navigate to WhatsApp setup with Embedded Signup');
-    // In practice, you would render the WhatsAppOAuthSetup component modal here
-    // For now, we can show a message or implement the modal
-    alert('Please use the WhatsApp setup modal to connect. Embedded Signup is starting...');
+    setShowWhatsAppSetup(true);
   };
 
   const handleDisconnect = async () => {
@@ -249,6 +244,18 @@ export default function SettingsPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* WhatsApp Setup Modal */}
+        {showWhatsAppSetup && (
+          <WhatsAppOAuthSetup
+            wabaConnection={wabaConnection}
+            token={token}
+            onConnectionUpdate={() => {
+              fetchWabaStatus();
+              setShowWhatsAppSetup(false);
+            }}
+          />
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   );
