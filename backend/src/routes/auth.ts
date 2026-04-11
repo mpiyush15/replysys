@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import Account from '../models/Account';
 import { emailService } from '../services/emailService';
 import { UserStatus, UserRole } from '../constants/enums';
 
@@ -48,13 +49,16 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
-    // Generate JWT token
+    // Get user's account to include Account._id in JWT
+    const account = await Account.findOne({ userId: user._id }).lean();
+
+    // Generate JWT token with Account._id as accountId
     const token = jwt.sign(
       {
         userId: user._id.toString(),
         email: user.email,
         role: user.role,
-        accountId: user.accountId?.toString() || user._id.toString(),
+        accountId: account?._id.toString() || user._id.toString(),
       },
       JWT_SECRET,
       { expiresIn: '7d' }
@@ -66,7 +70,7 @@ router.post('/login', async (req: Request, res: Response) => {
       email: user.email,
       name: user.name,
       role: user.role,
-      accountId: user.accountId || null,
+      accountId: account?._id.toString() || null,
     };
 
     res.json({
@@ -127,13 +131,16 @@ router.post('/register', async (req: Request, res: Response) => {
       console.error('Failed to send admin notification:', err.message);
     });
 
-    // Generate JWT token
+    // Get user's account to include Account._id in JWT
+    const account = await Account.findOne({ userId: newUser._id }).lean();
+
+    // Generate JWT token with Account._id as accountId
     const token = jwt.sign(
       {
         userId: newUser._id.toString(),
         email: newUser.email,
         role: newUser.role,
-        accountId: newUser.accountId?.toString() || newUser._id.toString(),
+        accountId: account?._id.toString() || newUser._id.toString(),
       },
       JWT_SECRET,
       { expiresIn: '7d' }

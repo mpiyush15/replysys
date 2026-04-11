@@ -308,20 +308,31 @@ export const getWhatsAppStatus = async (req: Request, res: Response) => {
     let accountId = (req as any).accountId;
 
     console.log('📊 Fetching WhatsApp status for user:', userId);
+    console.log('📊 Initial accountId from middleware:', accountId);
 
-    if (!accountId) {
-      const account = await Account.findOne({
+    // ALWAYS look up Account to get the correct Account._id for database queries
+    // The middleware may have set accountId to user.accountId field,
+    // but we need Account._id to query PhoneNumbers
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({
         $or: [
           { userId },
-          { accountId: userId }
+          { accountId: accountId }
         ]
       }).lean();
-
-      // Use Account._id as the primary accountId for querying PhoneNumbers
-      accountId = account?._id ? String(account._id) : String(userId);
     }
 
-    console.log('📊 Using accountId:', accountId);
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found'
+      });
+    }
+
+    // Use Account._id as the primary accountId for database queries
+    accountId = String(account._id);
+    console.log('📊 Using Account._id as accountId:', accountId);
 
     // Get phone numbers from PhoneNumber collection (authority)
     const phoneNumbers = await PhoneNumber.find({ 
