@@ -115,9 +115,11 @@ export function WhatsAppOAuthSetup({
             console.log('✅✅ BACKEND SUCCESS:', response.data);
 
             if (response.data?.success) {
-              console.log('🎉 PHONE REGISTERED - polling to confirm');
-              setSetupStep('polling');
-              setPollCount(0);
+              console.log('🎉 PHONE REGISTERED - refreshing status now');
+              setSetupStep('connected');
+              setTimeout(() => {
+                onConnectionUpdate();
+              }, 1000);
             }
           } catch (error: any) {
             console.error('❌ BACKEND FAILED:', error.response?.data || error.message);
