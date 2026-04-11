@@ -85,29 +85,26 @@ export function WhatsAppOAuthSetup({
 
       // ✅ FINISH event
       if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.event === 'FINISH') {
-        console.log('🎉 FINISH EVENT DETECTED!');
-        console.log('DATA:', JSON.stringify(data, null, 2));
+        console.log('🎉🎉🎉 FINISH EVENT DETECTED! 🎉🎉🎉');
+        console.log('Full data:', JSON.stringify(data, null, 2));
 
         const wabaId = data?.data?.waba_id;
         const phoneNumberId = data?.data?.phone_number_id;
-        
-        // ✅ Handle both naming conventions
         const phoneNumber = 
           data?.data?.display_phone_number || 
           data?.data?.phone_number || 
           'unknown';
 
-        console.log('Extracted:', { wabaId, phoneNumberId, phoneNumber });
+        console.log('✅ Extracted:', { wabaId, phoneNumberId, phoneNumber });
 
         if (wabaId && phoneNumberId && token) {
+          console.log('🔥 CALLING BACKEND NOW');
           setSetupStep('connecting');
-          console.log('🔄 Calling backend to register phone...');
 
           try {
             const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
             
             console.log('📤 POST', backendUrl);
-            console.log('Body:', { wabaId, phoneNumberId, phoneNumber });
 
             const response = await axios.post(
               backendUrl,
@@ -115,23 +112,19 @@ export function WhatsAppOAuthSetup({
               { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            console.log('✅ BACKEND RESPONSE:', response.data);
+            console.log('✅✅ BACKEND SUCCESS:', response.data);
 
             if (response.data?.success) {
-              console.log('🎉 REGISTERED - starting polling to confirm');
+              console.log('🎉 PHONE REGISTERED - polling to confirm');
               setSetupStep('polling');
               setPollCount(0);
-            } else {
-              console.error('❌ Backend returned error:', response.data);
-              setSetupStep('idle');
             }
           } catch (error: any) {
-            console.error('❌ BACKEND ERROR:', error.response?.data || error.message);
-            console.error('Status:', error.response?.status);
+            console.error('❌ BACKEND FAILED:', error.response?.data || error.message);
             setSetupStep('idle');
           }
         } else {
-          console.error('❌ Missing data:', { wabaId, phoneNumberId, token: !!token });
+          console.error('❌ Missing:', { wabaId: !!wabaId, phoneNumberId: !!phoneNumberId, token: !!token });
         }
       }
     };
@@ -199,17 +192,21 @@ export function WhatsAppOAuthSetup({
   const handleStartOAuth = () => {
     if (typeof window !== 'undefined' && (window as any).FB) {
       setSetupStep('connecting');
-      console.log('🚀 Starting FB.login...');
+      console.log('🚀 Starting FB.login with Embedded Signup...');
+      console.log('Config ID: 1239299391737840');
 
       (window as any).FB.login(
         function (response: any) {
-          console.log('✅ FB.login response:', response?.authResponse?.status);
+          console.log('📋 FULL FB.login response:', response);
+          console.log('Status:', response?.status);
+          console.log('AuthResponse:', response?.authResponse);
           
-          // Start polling for phone registration
           if (response?.authResponse) {
-            console.log('🔄 Starting auto-poll for phone...');
-            setSetupStep('polling');
-            setPollCount(0);
+            console.log('✅ Auth received - waiting for FINISH event from Meta...');
+            // DON'T start polling here - wait for FINISH event
+          } else {
+            console.error('❌ No authResponse - embedded signup may have failed');
+            setSetupStep('idle');
           }
         },
         {
@@ -220,7 +217,7 @@ export function WhatsAppOAuthSetup({
         }
       );
     } else {
-      console.error('Facebook SDK not ready');
+      console.error('❌ Facebook SDK not ready');
     }
   };
 
