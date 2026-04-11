@@ -213,18 +213,33 @@ export function WhatsAppOAuthSetup({
 
       (window as any).FB.login(
         function(response: any) {
-          console.log('FB.login response:', response);
+          console.log('📋 FULL FB.login response:', response);
+          console.log('📋 FULL authResponse:', response?.authResponse);
+          console.log('📋 authResponse keys:', Object.keys(response?.authResponse || {}));
 
           if (response.authResponse) {
-            const code = response.authResponse.code; // ✅ MUST exist for code flow
+            // 🔍 Try different code paths
+            const code = response.authResponse.code || 
+                         response.authResponse.accessToken ||
+                         response.code ||
+                         response.authResponse.auth_token;
 
-            console.log('🔥 CODE:', code);
+            console.log('🔍 Trying code paths:');
+            console.log('  response.authResponse.code:', response.authResponse.code);
+            console.log('  response.authResponse.accessToken:', response.authResponse.accessToken);
+            console.log('  response.code:', response.code);
+            console.log('  response.authResponse.auth_token:', response.authResponse.auth_token);
+            console.log('🔥 Final code value:', code);
 
-            // ✅ Store globally for FINISH event
-            (window as any).whatsappAuthCode = code;
-            console.log('💾 Code stored in window.whatsappAuthCode');
+            if (code) {
+              (window as any).whatsappAuthCode = code;
+              console.log('💾 Code stored in window.whatsappAuthCode');
+            } else {
+              console.error('❌ NO CODE FOUND IN ANY PATH - check authResponse structure');
+            }
           } else {
             console.error('❌ No authResponse in FB.login response');
+            console.error('Full response:', JSON.stringify(response, null, 2));
           }
         },
         {
