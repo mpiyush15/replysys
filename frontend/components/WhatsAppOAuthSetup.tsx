@@ -212,40 +212,31 @@ export function WhatsAppOAuthSetup({
       console.log('🚀 Starting FB.login with Embedded Signup...');
 
       (window as any).FB.login(
-        function(response: any) {
-          console.log('📋 FULL FB.login response:', response);
-          console.log('📋 FULL authResponse:', response?.authResponse);
-          console.log('📋 authResponse keys:', Object.keys(response?.authResponse || {}));
+        function (response: any) {
+          console.log('🔥 FULL FB.login response:', response);
 
           if (response.authResponse) {
-            // 🔍 Try different code paths
-            const code = response.authResponse.code || 
-                         response.authResponse.accessToken ||
-                         response.code ||
-                         response.authResponse.auth_token;
+            const code = response.authResponse.code;
 
-            console.log('🔍 Trying code paths:');
-            console.log('  response.authResponse.code:', response.authResponse.code);
-            console.log('  response.authResponse.accessToken:', response.authResponse.accessToken);
-            console.log('  response.code:', response.code);
-            console.log('  response.authResponse.auth_token:', response.authResponse.auth_token);
-            console.log('🔥 Final code value:', code);
+            console.log('🔥 CODE RECEIVED:', code);
 
-            if (code) {
-              (window as any).whatsappAuthCode = code;
-              console.log('💾 Code stored in window.whatsappAuthCode');
-            } else {
-              console.error('❌ NO CODE FOUND IN ANY PATH - check authResponse structure');
+            if (!code) {
+              console.error('❌ NO CODE → WRONG CONFIG');
+              console.log('Full authResponse:', response.authResponse);
+              return;
             }
-          } else {
-            console.error('❌ No authResponse in FB.login response');
-            console.error('Full response:', JSON.stringify(response, null, 2));
+
+            (window as any).whatsappAuthCode = code;
+            console.log('💾 Code stored:', code.substring(0, 20) + '...');
           }
         },
         {
           config_id: '1239299391737840',
-          response_type: 'code', // 🔥 CRITICAL
-          override_default_response_type: true // 🔥 CRITICAL
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {}
+          }
         }
       );
     } else {
