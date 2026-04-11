@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import Message from '../models/Message';
+import Conversation from '../models/Conversation';
+import Account from '../models/Account';
+import PhoneNumber from '../models/PhoneNumber';
 import whatsappService from '../services/whatsappService';
 
 /**
@@ -138,6 +141,179 @@ export const sendBulkMessages = async (req: Request, res: Response) => {
 };
 
 /**
+ * GET /api/client/conversations
+ * Get all conversations for account
+ */
+export const getConversations = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId as string;
+    const accountId = (req as any).accountId as string;
+    const { status = 'open', limit = 50, offset = 0 } = req.query;
+
+    console.log('📋 Fetching conversations:', { userId, accountId, status });
+
+    let query: any = { accountId };
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+
+    const conversations = await Conversation.find(query)
+      .sort({ lastMessageAt: -1 })
+      .limit(parseInt(limit as string))
+      .skip(parseInt(offset as string))
+      .lean();
+
+    const total = await Conversation.countDocuments(query);
+
+    return res.json({
+      success: true,
+      data: conversations,
+      pagination: {
+        total,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Get conversations error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch conversations'
+    });
+  }
+};
+
+/**
+ * GET /api/client/conversations/:conversationId/messages
+ * Get messages for a specific conversation
+ */
+export const getConversationMessages = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId as string;
+    const accountId = (req as any).accountId as string;
+    const { conversationId } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    console.log('💬 Fetching messages:', { userId, accountId, conversationId });
+
+    // Verify conversation belongs to this account
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      accountId
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+
+    const messages = await Message.find({
+      conversationId,
+      accountId
+    })
+      .sort({ sentAt: 1 })
+      .limit(parseInt(limit as string))
+      .skip(parseInt(offset as string))
+      .lean();
+
+    // Mark messages as read if they're inbound
+    await Message.updateMany(
+      {
+        conversationId,
+        direction: 'inbound',
+        status: { $ne: 'read' }
+      },
+      {
+        status: 'read',
+        readAt: new Date()
+      }
+    );
+
+    return res.json({
+      success: true,
+      data: messages
+    });
+  } catch (error: any) {
+    console.error('❌ Get messages error:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch messages'
+    });
+  }
+};
+
+/**
+ * POST /api/client/conversations/:conversationId/messages
+ * Send message in a conversation
+ */
+export const sendConversationMessage = async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId as string;
+    const accountId = (req as any).accountId as string;
+    const { conversationId } = req.params;
+    const { message, phoneNumberId } = req.body;
+
+    console.log('📤 Sending conversation message:', { userId, accountId, conversationId });
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Message content is required'
+      });
+    }
+
+    // Verify conversation belongs to this account
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      accountId
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+
+    // Verify phone number belongs to this account
+    const phoneNumber = await PhoneNumber.findOne({
+      accountId: (req as any).accountId,
+      phoneNumberId: phoneNumberId || conversation.contactPhone
+    });
+
+    if (!phoneNumber) {
+      return res.status(404).json({
+        success: false,
+        message: 'Phone number not configured'
+      });
+    }
+
+    // Send message via WhatsApp
+    const result = await whatsappService.sendTextMessage(
+      userId,
+      phoneNumber.phoneNumberId,
+      conversation.contactPhone,
+      message.trim(),
+      { conversationId, source: 'chat' }
+    );
+
+    return res.json({
+      success: true,
+      message: 'Message sent successfully',
+      data: result
+    });
+  } catch (error: any) {
+    console.error('❌ Send message error:', error.message);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to send message'
+    });
+  }
+};
+
+/**
  * GET /api/client/messages
  * Get all messages for account
  */
@@ -210,5 +386,8 @@ export default {
   sendMessage,
   sendBulkMessages,
   getMessages,
-  getMessage
+  getMessage,
+  getConversations,
+  getConversationMessages,
+  sendConversationMessage
 };

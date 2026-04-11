@@ -3,10 +3,31 @@ import {
   sendMessage,
   sendBulkMessages,
   getMessages,
-  getMessage
+  getMessage,
+  getConversations,
+  getConversationMessages,
+  sendConversationMessage
 } from '../controllers/messageController';
 
 const router = express.Router();
+
+/**
+ * GET /api/client/conversations
+ * List all conversations
+ */
+router.get('/conversations', getConversations);
+
+/**
+ * GET /api/client/conversations/:conversationId/messages
+ * Get messages for a conversation
+ */
+router.get('/conversations/:conversationId/messages', getConversationMessages);
+
+/**
+ * POST /api/client/conversations/:conversationId/messages
+ * Send message in a conversation
+ */
+router.post('/conversations/:conversationId/messages', sendConversationMessage);
 
 /**
  * GET /api/client/messages
