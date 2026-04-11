@@ -6,19 +6,42 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MdSettings } from 'react-icons/md';
-import { WhatsAppSettingsModal } from '@/components/WhatsAppSettingsModal';
+import { WhatsAppOAuthSetup } from '@/components/WhatsAppOAuthSetup';
+import axios from 'axios';
 
 export default function ActivitiesPage() {
   const user = useAuthStore((state) => state.user);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [wabaConnection, setWabaConnection] = useState<any>(null);
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
   };
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+  const fetchWabaStatus = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/status`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setWabaConnection(response.data.data);
+    } catch (error: any) {
+      console.error('Failed to fetch status:', error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && token) {
+      fetchWabaStatus();
+    }
+  }, [token, fetchWabaStatus]);
 
   return (
     <ProtectedRoute requiredRole="client">
@@ -43,10 +66,10 @@ export default function ActivitiesPage() {
           </div>
         </motion.div>
 
-        <WhatsAppSettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
+        <WhatsAppOAuthSetup
+          wabaConnection={wabaConnection}
           token={token}
+          onConnectionUpdate={fetchWabaStatus}
         />
       </DashboardLayout>
     </ProtectedRoute>

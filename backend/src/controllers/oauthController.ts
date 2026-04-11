@@ -80,15 +80,22 @@ function logConsistencyEvent(type: string, data: any) {
 
 /**
  * POST /api/client/oauth/whatsapp
- * Exchange OAuth code for access token + phone data
- * Single write point - saves to PhoneNumber (authority)
+ * Exchange OAuth code for access token (Embedded Signup)
+ * Save WABA + phone data if provided by frontend
+ * Wait for webhook for final confirmation
  */
 export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
   try {
-    const { code, state } = req.body;
+    const { code, wabaId, phoneNumberId, phoneNumber } = req.body;
     const userId = req.userId;
 
-    console.log('🔐 OAuth: Starting token exchange for user:', userId);
+    console.log('\n🔐 ========== EMBEDDED SIGNUP OAUTH ==========');
+    console.log('👤 User:', userId);
+    console.log('📊 Data from frontend:');
+    console.log('   Code:', code?.substring(0, 10) + '...');
+    console.log('   WABA ID:', wabaId);
+    console.log('   Phone ID:', phoneNumberId);
+    console.log('   Phone Number:', phoneNumber);
 
     if (!code) {
       return res.status(400).json({
@@ -97,18 +104,10 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       });
     }
 
-    // 1. Exchange code for access token
-    console.log('🔄 Exchanging code for access token...');
-    console.log('OAuth Params:', {
-      client_id: process.env.META_APP_ID,
-      code: code?.substring(0, 20) + '...' // Log first 20 chars only
-    });
-
+    // 1. Exchange code for token
+    console.log('\n💳 Exchanging code for token...');
     let tokenResponse;
     try {
-      // Use GET request with params for token exchange
-      // Include redirect_uri to match what frontend sent (required by Meta)
-      console.log('🔄 Making GET request to Meta token endpoint...');
       tokenResponse = await axios.get(
         `${GRAPH_API_URL}/oauth/access_token`,
         {
@@ -120,30 +119,12 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
           }
         }
       );
-      console.log('✅ Token response received:', {
-        hasAccessToken: !!tokenResponse.data?.access_token,
-        responseKeys: Object.keys(tokenResponse.data || {})
-      });
-    } catch (error: any) {
-      console.error('❌ OAuth token exchange FAILED:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        code: error.code
-      });
-
-      // Always return proper JSON error response
-      return res.status(error.response?.status || 400).json({
+    } catch (tokenError: any) {
+      console.error('❌ Token exchange failed:', tokenError.response?.data || tokenError.message);
+      return res.status(400).json({
         success: false,
-        message: 'Failed to exchange code for access token',
-        error: error.response?.data?.error?.message || error.message,
-        meta: error.response?.data || {
-          error: {
-            type: error.code,
-            message: error.message
-          }
-        }
+        message: 'Failed to exchange code for token',
+        error: tokenError.response?.data?.error?.message || tokenError.message
       });
     }
 
@@ -151,145 +132,22 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
     console.log('✅ Token exchanged successfully');
     console.log('📌 Token:', access_token.substring(0, 20) + '...');
 
-    // 2. Verify token + CHECK SCOPES
-    console.log('🔐 Verifying token and checking scopes...');
-    try {
-      const debugResponse = await axios.get(
-        `${GRAPH_API_URL}/debug_token`,
-        {
-          params: {
-            input_token: access_token,
-            access_token: `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`
-          }
-        }
-      );
-      
-      console.log('✅ Token verified');
-      console.log('📋 Token Details:');
-      console.log('   App ID:', debugResponse.data?.data?.app_id);
-      console.log('   User ID:', debugResponse.data?.data?.user_id);
-      console.log('   Is Valid:', debugResponse.data?.data?.is_valid);
-      console.log('   Expires at:', debugResponse.data?.data?.expires_at);
-      
-      const scopes = debugResponse.data?.data?.scopes || [];
-      console.log('✅ SCOPES GRANTED:');
-      scopes.forEach((scope: string) => {
-        console.log(`   ✓ ${scope}`);
-      });
-      
-      // Check required scopes
-      const requiredScopes = [
-        'whatsapp_business_management',
-        'whatsapp_business_messaging',
-        'business_management'
-      ];
-      
-      const missingScopes = requiredScopes.filter(scope => !scopes.includes(scope));
-      if (missingScopes.length > 0) {
-        console.warn('⚠️ MISSING SCOPES:');
-        missingScopes.forEach(scope => {
-          console.warn(`   ❌ ${scope}`);
-        });
-      } else {
-        console.log('✅ All required scopes present!');
-      }
-    } catch (tokenError: any) {
-      console.warn('⚠️ Token verification failed:', tokenError.message);
-      console.warn('   Error:', tokenError.response?.data || tokenError.message);
-    }
-
-    // 3. ✅ DIRECT API FLOW - BUSINESS-BASED APPROACH (CORRECT)
-    console.log('🏢 ========== BUSINESS-BASED WABA FETCH ==========');
-    
-    let wabaId: string | null = null;
-    let phoneNumbers: any[] = [];
-    let businessId: string | null = null;
-
-    try {
-      // STEP 1: Get business ID
-      console.log('📊 Step 1: Fetching business ID...');
-      const bizResponse = await axios.get(
-        `${GRAPH_API_URL}/me/businesses`,
-        {
-          params: {
-            access_token: access_token
-          }
-        }
-      );
-
-      console.log('✅ Business Response:', JSON.stringify(bizResponse.data, null, 2));
-      businessId = bizResponse.data?.data?.[0]?.id;
-      
-      if (!businessId) {
-        console.warn('⚠️ No business found for this account');
-        console.log('   Full response:', JSON.stringify(bizResponse.data, null, 2));
-      } else {
-        console.log('✅ Business ID:', businessId);
-
-        // STEP 2: Get WABA from business
-        console.log('📱 Step 2: Fetching WABA from business...');
-        const wabaResponse = await axios.get(
-          `${GRAPH_API_URL}/${businessId}/owned_whatsapp_business_accounts`,
-          {
-            params: {
-              access_token: access_token
-            }
-          }
-        );
-
-        console.log('✅ WABA Response:', JSON.stringify(wabaResponse.data, null, 2));
-        wabaId = wabaResponse.data?.data?.[0]?.id;
-
-        if (!wabaId) {
-          console.warn('⚠️ No WABA found in business');
-        } else {
-          console.log('✅ WABA ID:', wabaId);
-
-          // STEP 3: Get phone numbers
-          console.log('📞 Step 3: Fetching phone numbers...');
-          const phoneResponse = await axios.get(
-            `${GRAPH_API_URL}/${wabaId}/phone_numbers`,
-            {
-              params: {
-                fields: 'id,phone_number,display_phone_number,quality_rating,name_status',
-                access_token: access_token
-              }
-            }
-          );
-
-          phoneNumbers = phoneResponse.data?.data || [];
-          console.log(`✅ Fetched ${phoneNumbers.length} phone number(s)`);
-          phoneNumbers.forEach((p, i) => {
-            console.log(`   ${i+1}. ${p.display_phone_number} (${p.quality_rating})`);
-          });
-        }
-      }
-    } catch (fetchError: any) {
-      console.error('❌ BUSINESS FLOW FAILED');
-      console.error('   Error Code:', fetchError.response?.status);
-      console.error('   Error Message:', fetchError.response?.statusText);
-      console.error('   Error Details:', JSON.stringify(fetchError.response?.data, null, 2));
-      console.error('   Full Error:', fetchError.message);
-      
-      console.warn('   Proceeding without WABA/phones');
-    }
-
-    // Get user
+    // 2. Get or create User
     const user = await User.findById(userId);
     
     if (!user) {
-      console.error('❌ User not found for userId:', userId);
+      console.error('❌ User not found');
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
-    // ✅ CREATE or UPDATE Account record
+    // 3. Create or update Account
+    console.log('\n📝 Updating Account...');
     let account = await Account.findOne({ accountId: String(userId) });
     
     if (!account) {
-      console.log('📝 Creating new Account...');
       account = new Account({
         accountId: String(userId),
         userId: new (require('mongoose')).Types.ObjectId(userId),
@@ -297,7 +155,7 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
         metaSync: {
           accountId: String(userId),
           oauthAccessToken: access_token,
-          status: wabaId ? 'synced' : 'authorized',
+          status: 'authorized',
           oauth_timestamp: new Date()
         },
         status: 'active'
@@ -305,13 +163,12 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       await account.save();
       console.log('✅ Account created');
     } else {
-      console.log('📝 Updating existing Account...');
       account.wabaId = wabaId || account.wabaId;
       account.metaSync = {
         ...(account.metaSync || {}),
         accountId: String(userId),
         oauthAccessToken: access_token,
-        status: wabaId ? 'synced' : 'authorized',
+        status: 'authorized',
         oauth_timestamp: new Date()
       };
       account.status = 'active';
@@ -319,83 +176,66 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
       console.log('✅ Account updated');
     }
 
-    // ✅ CREATE phone records if we got them
-    if (wabaId && phoneNumbers.length > 0) {
-      console.log('💾 Saving phone numbers to database...');
-      for (const phone of phoneNumbers) {
-        try {
-          const existing = await PhoneNumber.findOne({
-            accountId: String(userId),
-            phoneNumberId: phone.id
-          });
+    // 4. If we got phone data from frontend, save it
+    if (wabaId && phoneNumberId && phoneNumber) {
+      console.log('\n💾 Saving phone number...');
+      try {
+        const existing = await PhoneNumber.findOne({
+          accountId: String(userId),
+          phoneNumberId
+        });
 
-          if (existing) {
-            console.log(`   ⚠️ Phone already exists: ${phone.display_phone_number}`);
-            continue;
-          }
-
+        if (existing) {
+          console.log('   ⚠️ Phone already exists, updating...');
+          existing.displayPhoneNumber = phoneNumber;
+          existing.wabaId = wabaId;
+          existing.status = 'pending_verification';
+          await existing.save();
+        } else {
           const phoneRecord = new PhoneNumber({
             accountId: String(userId),
-            phoneNumberId: phone.id,
+            phoneNumberId,
             wabaId,
-            displayPhoneNumber: phone.display_phone_number,
-            qualityRating: phone.quality_rating || 'UNKNOWN',
-            verifiedName: phone.name_status || 'Not verified',
-            isVerified: true,
-            verifiedAt: new Date(),
-            status: 'active'
+            displayPhoneNumber: phoneNumber,
+            status: 'pending_verification'
           });
-
           await phoneRecord.save();
-          console.log(`   ✅ Phone saved: ${phone.display_phone_number}`);
-        } catch (phoneError: any) {
-          console.error(`   ❌ Error saving phone:`, phoneError.message);
+          console.log('✅ Phone saved:', phoneNumber);
         }
+      } catch (phoneError: any) {
+        console.warn('⚠️ Could not save phone:', phoneError.message);
       }
     }
 
-    // Store OAuth token in User model
+    // 5. Update User
     (user as any).oauthAccessToken = access_token;
-    (user as any).oauthStatus = wabaId ? 'oauth_completed' : 'oauth_completed_awaiting_webhook';
+    (user as any).oauthStatus = 'oauth_completed_awaiting_webhook';
     (user as any).wabaId = wabaId || (user as any).wabaId;
     (user as any).oauthTimestamp = new Date();
     await user.save();
 
-    const connectionStatus = wabaId ? '✅ CONNECTED' : '⏳ AWAITING WEBHOOK';
-    console.log(connectionStatus);
-    console.log('✅ OAuth complete');
+    console.log('\n⏳ Status: AWAITING WEBHOOK FROM META');
+    console.log('✅ OAuth complete - setup saved');
     console.log('================================================\n');
 
-    // Return success response
     return res.json({
       success: true,
-      message: wabaId 
-        ? '✅ WhatsApp connected successfully!' 
-        : '⏳ OAuth successful! Waiting for webhook...',
+      message: '✅ WhatsApp setup saved! Waiting for final webhook...',
       userId: userId,
-      status: wabaId ? 'connected' : 'awaiting_webhook',
+      status: 'awaiting_webhook',
       wabaId: wabaId || null,
-      phoneNumbers: phoneNumbers.length > 0 ? phoneNumbers : null,
-      nextSteps: wabaId 
-        ? [
-            '✅ WhatsApp Business Account connected',
-            `✅ Phone: ${phoneNumbers[0]?.display_phone_number || 'Ready'}`,
-            'Ready to send messages!'
-          ]
-        : [
-            '✅ OAuth token saved',
-            '⏳ Waiting for webhook',
-            'Refresh page to see connection'
-          ]
+      phone: phoneNumber || null,
+      nextSteps: [
+        '✅ OAuth token saved',
+        '⏳ Waiting for Meta webhook to finalize setup',
+        'Usually arrives within 30 seconds',
+        'Your phone will be ready to use shortly'
+      ]
     });
 
   } catch (error: any) {
     console.error('❌ OAuth error:', error.message);
-    
-    // Log detailed error for debugging
-    if (error.response?.data) {
-      console.error('Error details:', error.response.data);
-    }
+    console.error('   Details:', error.response?.data || error.message);
 
     logConsistencyEvent('oauth_error', {
       userId: req.userId,

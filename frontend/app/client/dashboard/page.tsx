@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { WhatsAppSettingsModal } from '@/components/WhatsAppSettingsModal';
+import { WhatsAppOAuthSetup } from '@/components/WhatsAppOAuthSetup';
 import { LiveChat } from '@/components/LiveChat/LiveChat';
 
 function DashboardContent() {
@@ -61,6 +61,30 @@ function DashboardContent() {
 
 export default function ClientDashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [wabaConnection, setWabaConnection] = useState<any>(null);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+  const fetchWabaStatus = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/status`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const data = await res.json();
+      setWabaConnection(data.data);
+    } catch (error: any) {
+      console.error('Failed to fetch status:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && token) {
+      fetchWabaStatus();
+    }
+  }, [token]);
 
   return (
     <ProtectedRoute requiredRole="client">
@@ -76,12 +100,14 @@ export default function ClientDashboard() {
           <DashboardContent />
         </Suspense>
         
-        {/* Settings Modal - Outside Suspense */}
-        <WhatsAppSettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          token={typeof window !== 'undefined' ? localStorage.getItem('authToken') : null}
-        />
+        {/* WhatsApp Setup */}
+        {isSettingsOpen && (
+          <WhatsAppOAuthSetup
+            wabaConnection={wabaConnection}
+            token={token}
+            onConnectionUpdate={fetchWabaStatus}
+          />
+        )}
       </DashboardLayout>
     </ProtectedRoute>
   );

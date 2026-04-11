@@ -36,10 +36,10 @@ export function WhatsAppOAuthSetup({
   const [oauthStatus, setOauthStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [oauthMessage, setOauthMessage] = useState('');
 
-  // ✅ Initialize Facebook SDK
+  // ✅ Initialize Facebook SDK for Embedded Signup
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Load FB SDK
+      // Set up FB SDK
       (window as any).fbAsyncInit = function() {
         (window as any).FB.init({
           appId: '2094709584392829',
@@ -49,7 +49,7 @@ export function WhatsAppOAuthSetup({
         });
       };
 
-      // Load script if not already loaded
+      // Load FB SDK if not already loaded
       if (!(window as any).FB) {
         const script = document.createElement('script');
         script.src = 'https://connect.facebook.net/en_US/sdk.js';
@@ -58,34 +58,37 @@ export function WhatsAppOAuthSetup({
         document.body.appendChild(script);
       }
 
-      // ✅ Listen for postMessage from callback popup
+      // ✅ Listen for postMessage from Embedded Signup
       const handleMessage = async (event: MessageEvent) => {
-        // Accept messages from callback page
-        if (!event.origin.includes(window.location.hostname)) return;
+        // Only accept messages from Facebook
+        if (event.origin !== 'https://www.facebook.com') return;
 
         try {
           const data = event.data;
           
-          if (data.type === 'WA_OAUTH_COMPLETE') {
-            const { code, error, errorDescription } = data;
-
-            if (error) {
-              console.error('OAuth Error:', error, errorDescription);
-              setOauthStatus('error');
-              setOauthMessage(`Authorization failed: ${errorDescription || error}`);
-              return;
-            }
+          if (data.type === 'WA_EMBEDDED_SIGNUP') {
+            console.log('✅ Embedded Signup Complete:', data);
+            
+            // Extract WABA + phone data from Meta
+            const wabaId = data.data?.waba_id;
+            const phoneNumberId = data.data?.phone_number_id;
+            const phoneNumber = data.data?.phone_number;
+            const code = data.data?.code;
 
             if (code) {
-              console.log('✅ Got OAuth code from callback:', code);
               setOauthStatus('loading');
-              setOauthMessage('Exchanging code for token...');
+              setOauthMessage('Saving WhatsApp setup...');
 
               try {
-                // Exchange code for token on our backend
+                // Send code to backend (backend will exchange for token)
                 const response = await axios.post(
                   `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`,
-                  { code },
+                  { 
+                    code,
+                    wabaId,
+                    phoneNumberId,
+                    phoneNumber
+                  },
                   {
                     headers: {
                       Authorization: `Bearer ${token}`
@@ -93,16 +96,16 @@ export function WhatsAppOAuthSetup({
                   }
                 );
 
-                console.log('✅ OAuth successful:', response.data);
+                console.log('✅ Setup saved:', response.data);
                 setOauthStatus('success');
-                setOauthMessage('✅ WhatsApp connected successfully!');
+                setOauthMessage('✅ WhatsApp setup saved! Waiting for final webhook...');
 
-                // Refresh connection data after short delay
+                // Refresh connection after delay
                 setTimeout(() => {
                   onConnectionUpdate();
-                }, 1500);
+                }, 2000);
               } catch (error: any) {
-                console.error('❌ Token exchange failed:', error);
+                console.error('❌ Setup save failed:', error);
                 setOauthStatus('error');
                 setOauthMessage(`Error: ${error.response?.data?.message || error.message}`);
               }
@@ -118,44 +121,28 @@ export function WhatsAppOAuthSetup({
     }
   }, [token, onConnectionUpdate]);
 
-  // Step 1: Start embedded signup flow
+  // Step 1: Start Embedded Signup via FB.login
   const handleStartOAuth = () => {
-    const appId = '2094709584392829';
-    const configId = '930769915977028';
-    
     if (typeof window !== 'undefined' && (window as any).FB) {
       setOauthStatus('loading');
       setOauthMessage('Opening WhatsApp onboarding...');
 
-      // Use FB.XFBML.parse to load embedded signup in modal
-      // This keeps user IN the app instead of redirecting
-      const embeddedSignupUrl = `https://www.facebook.com/v25.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent('https://replysys.com/auth/whatsapp/callback')}&scope=whatsapp_business_management,whatsapp_business_messaging,business_management&response_type=code`;
-      
-      // Open in popup instead of full redirect
-      const popup = window.open(
-        embeddedSignupUrl,
-        'Facebook Login',
-        'width=500,height=600'
+      // Use FB.login with Embedded Signup config
+      (window as any).FB.login(
+        function(response: any) {
+          console.log('FB.login response:', response);
+          // The postMessage listener will handle the actual signup flow
+        },
+        { 
+          config_id: '1239299391737840',  // ← Correct Embedded Signup config ID
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: { version: 'v4' }
+        }
       );
-
-      // Monitor popup for when it closes/completes
-      if (popup) {
-        const popupInterval = setInterval(() => {
-          try {
-            if (popup.closed) {
-              clearInterval(popupInterval);
-              setOauthStatus('idle');
-              setOauthMessage('');
-              // Refresh status to check if OAuth completed
-              setTimeout(() => {
-                onConnectionUpdate();
-              }, 1000);
-            }
-          } catch (e) {
-            // Ignore cross-origin errors
-          }
-        }, 500);
-      }
+    } else {
+      setOauthStatus('error');
+      setOauthMessage('Facebook SDK not ready. Please refresh the page.');
     }
   };
 
