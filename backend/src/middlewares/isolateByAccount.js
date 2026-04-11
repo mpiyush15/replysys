@@ -14,6 +14,11 @@ export const isolateByAccount = (req, res, next) => {
   }
 
   const userAccountId = req.user.accountId;
+  
+  console.log('🔒 isolateByAccount middleware - Account extracted:', {
+    accountId: userAccountId,
+    fromJWT: req.user.accountId
+  });
 
   // Check if trying to access different account's data
   if (req.query.accountId && req.query.accountId !== userAccountId) {

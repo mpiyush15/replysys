@@ -22,6 +22,13 @@ export const requireClient = (req, res, next) => {
 
   // Attach their userId to request for data isolation (use 'sub' from JWT)
   req.userId = req.user.sub || req.user.userId;
+  
+  console.log('🔐 requireClient middleware - User extracted:', {
+    sub: req.user.sub,
+    userId: req.user.userId,
+    role: req.user.role,
+    attachedUserId: req.userId
+  });
 
   next();
 };
