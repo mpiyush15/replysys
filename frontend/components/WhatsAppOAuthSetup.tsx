@@ -66,32 +66,52 @@ export function WhatsAppOAuthSetup({
       // ✅ FINISH event
       if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.event === 'FINISH') {
         console.log('✅ FINISH EVENT DETECTED');
+        console.log('DATA:', JSON.stringify(data, null, 2));
 
         const wabaId = data?.data?.waba_id;
         const phoneNumberId = data?.data?.phone_number_id;
-        const phoneNumber = data?.data?.phone_number || 'unknown';
+        
+        // ✅ Handle both naming conventions
+        const phoneNumber = 
+          data?.data?.display_phone_number || 
+          data?.data?.phone_number || 
+          'unknown';
+
+        console.log('Extracted:', { wabaId, phoneNumberId, phoneNumber });
 
         if (wabaId && phoneNumberId && token) {
           setSetupStep('connecting');
+          console.log('🔄 Calling backend to register phone...');
 
           try {
             const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
             
+            console.log('📤 POST', backendUrl);
+            console.log('Body:', { wabaId, phoneNumberId, phoneNumber });
+
             const response = await axios.post(
               backendUrl,
               { wabaId, phoneNumberId, phoneNumber },
               { headers: { Authorization: `Bearer ${token}` } }
             );
 
+            console.log('✅ BACKEND RESPONSE:', response.data);
+
             if (response.data?.success) {
-              console.log('🎉 REGISTERED');
-              setSetupStep('connected');
-              setTimeout(() => onConnectionUpdate(), 1500);
+              console.log('🎉 REGISTERED - starting polling to confirm');
+              setSetupStep('polling');
+              setPollCount(0);
+            } else {
+              console.error('❌ Backend returned error:', response.data);
+              setSetupStep('idle');
             }
           } catch (error: any) {
-            console.error('Error:', error.message);
+            console.error('❌ BACKEND ERROR:', error.response?.data || error.message);
+            console.error('Status:', error.response?.status);
             setSetupStep('idle');
           }
+        } else {
+          console.error('❌ Missing data:', { wabaId, phoneNumberId, token: !!token });
         }
       }
     };
@@ -106,8 +126,18 @@ export function WhatsAppOAuthSetup({
   useEffect(() => {
     if (setupStep !== 'polling' || !token) return;
 
+    let currentPollCount = 0;
+    const MAX_POLL_TIME = 30000; // 30 seconds max
+
     const pollInterval = setInterval(async () => {
-      setPollCount(prev => prev + 1);
+      currentPollCount++;
+
+      if (currentPollCount > MAX_POLLS) {
+        console.warn(`⚠️ Polling timeout after ${MAX_POLLS} attempts`);
+        clearInterval(pollInterval);
+        setSetupStep('idle');
+        return;
+      }
 
       try {
         const response = await axios.get(
@@ -117,38 +147,33 @@ export function WhatsAppOAuthSetup({
           }
         );
 
-        console.log('Status poll:', response.data);
-
-        // Check if webhook has arrived (status is now connected)
+        // Check if phone is now connected
         if (response.data?.data?.status === 'connected' && response.data?.data?.phoneNumbers?.length > 0) {
-          console.log('✅ Webhook received! Connection ready');
+          console.log('✅ Phone connected! Stopping poll');
           setSetupStep('connected');
           clearInterval(pollInterval);
           
-          // Refresh parent component
           setTimeout(() => {
             onConnectionUpdate();
           }, 1000);
         }
       } catch (error: any) {
-        console.error('Poll failed:', error.response?.data || error.message);
+        console.error('Poll failed:', error.message);
       }
-    }, 2000); // Poll every 2 seconds
+    }, 2000);
 
-    // Timeout after max polls
+    // Hard stop after 30 seconds
     const timeoutId = setTimeout(() => {
-      if (pollCount >= MAX_POLLS) {
-        console.warn('⚠️ Polling timeout - webhook did not arrive');
-        clearInterval(pollInterval);
-        setSetupStep('idle');
-      }
-    }, MAX_POLLS * 2000);
+      console.warn('⚠️ Polling stopped - timeout reached');
+      clearInterval(pollInterval);
+      setSetupStep('idle');
+    }, MAX_POLL_TIME);
 
     return () => {
       clearInterval(pollInterval);
       clearTimeout(timeoutId);
     };
-  }, [setupStep, token, pollCount, onConnectionUpdate]);
+  }, [setupStep, token, onConnectionUpdate]);
 
   // ✅ Start Embedded Signup
   const handleStartOAuth = () => {
@@ -225,13 +250,25 @@ export function WhatsAppOAuthSetup({
             />
           </div>
           <h3 className="font-semibold text-slate-900 mt-4">
-            {setupStep === 'connecting' ? 'Connecting WhatsApp...' : 'Waiting for webhook...'}
+            {setupStep === 'connecting' ? 'Connecting WhatsApp...' : 'Waiting for confirmation...'}
           </h3>
           <p className="text-slate-600 text-sm mt-2">
             {setupStep === 'connecting' 
               ? 'Complete onboarding on Meta'
-              : `Waiting for Meta to confirm (${pollCount}/${MAX_POLLS})`}
+              : `Checking status... (${pollCount}/${MAX_POLLS})`}
           </p>
+
+          {setupStep === 'polling' && (
+            <button
+              onClick={() => {
+                setSetupStep('idle');
+                setPollCount(0);
+              }}
+              className="mt-4 text-sm text-blue-600 hover:text-blue-700 underline"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </motion.div>
     );
