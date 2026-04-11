@@ -305,14 +305,26 @@ export const handleWhatsAppOAuth = async (req: Request, res: Response) => {
 export const getWhatsAppStatus = async (req: Request, res: Response) => {
   try {
     const userId = req.userId;
-    const accountId = (req as any).accountId;
+    let accountId = (req as any).accountId;
 
     console.log('📊 Fetching WhatsApp status for user:', userId);
-    console.log('📊 Using accountId:', accountId || String(userId));
+
+    if (!accountId) {
+      const account = await Account.findOne({
+        $or: [
+          { userId },
+          { accountId: userId }
+        ]
+      }).lean();
+
+      accountId = account?.accountId || (account?._id ? String(account._id) : String(userId));
+    }
+
+    console.log('📊 Using accountId:', accountId);
 
     // Get phone numbers from PhoneNumber collection (authority)
     const phoneNumbers = await PhoneNumber.find({ 
-      accountId: accountId || String(userId),
+      accountId,
       status: { $ne: 'inactive' }
     }).lean();
 
@@ -452,7 +464,7 @@ export const connectWhatsApp = async (req: Request, res: Response) => {
         });
       }
 
-      accountId = account._id || account.accountId;
+      accountId = account.accountId || String(account._id);
     }
 
     console.log(`   accountId: ${accountId}`);
