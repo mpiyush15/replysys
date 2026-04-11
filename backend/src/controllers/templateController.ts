@@ -19,14 +19,20 @@ export const syncTemplates = async (req: Request, res: Response) => {
     console.log('User ID:', userId);
     console.log('Account ID:', accountId);
 
-    // Get account
-    const account = await Account.findById(accountId).lean();
+    // Get account - try both as _id and as accountId field
+    let account: any = await Account.findById(accountId).lean();
     if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    if (!account) {
+      console.error('Account not found with accountId:', accountId);
       return res.status(404).json({
         success: false,
         message: 'Account not found'
       });
     }
+
+    console.log('Found account:', account._id);
 
     const wabaId = account.wabaId;
     if (!wabaId) {
@@ -36,9 +42,9 @@ export const syncTemplates = async (req: Request, res: Response) => {
       });
     }
 
-    // Get phone number with access token
+    // Get phone number with access token - use Account._id
     const phone = await PhoneNumber.findOne({
-      accountId,
+      accountId: String(account._id),
       wabaId
     }).lean();
 
@@ -104,13 +110,13 @@ export const syncTemplates = async (req: Request, res: Response) => {
         // Save template
         const template = await Template.findOneAndUpdate(
           {
-            accountId,
+            accountId: String(account._id),
             phoneNumberId: phone.phoneNumberId,
             templateId: metaTemplate.id,
             name: metaTemplate.name
           },
           {
-            accountId,
+            accountId: String(account._id),
             phoneNumberId: phone.phoneNumberId,
             wabaId,
             name: metaTemplate.name,
@@ -170,7 +176,13 @@ export const getTemplates = async (req: Request, res: Response) => {
 
     console.log('📋 Fetching templates:', { accountId, status, category });
 
-    let query: any = { accountId };
+    // Lookup account to get Account._id
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    
+    let query: any = { accountId: account ? String(account._id) : accountId };
     if (status) query.status = status;
     if (category) query.category = category;
 
@@ -220,7 +232,10 @@ export const createTemplate = async (req: Request, res: Response) => {
     }
 
     // Get WABA ID
-    const account = await Account.findById(accountId).lean();
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
     if (!account?.wabaId) {
       return res.status(400).json({
         success: false,
@@ -228,9 +243,9 @@ export const createTemplate = async (req: Request, res: Response) => {
       });
     }
 
-    // Get phone number
+    // Get phone number - use Account._id
     const phone = await PhoneNumber.findOne({
-      accountId,
+      accountId: String(account._id),
       phoneNumberId
     }).lean();
 
@@ -310,7 +325,7 @@ export const createTemplate = async (req: Request, res: Response) => {
 
     // Save to database
     const template = await Template.create({
-      accountId,
+      accountId: String(account._id),
       phoneNumberId: phone.phoneNumberId,
       wabaId: account.wabaId,
       name,
@@ -355,9 +370,15 @@ export const deleteTemplate = async (req: Request, res: Response) => {
     const { templateId } = req.params;
     const accountId = (req as any).accountId as string;
 
+    // Lookup account to get Account._id
+    let account: any = await Account.findById(accountId).lean();
+    if (!account) {
+      account = await Account.findOne({ accountId }).lean();
+    }
+    
     const template = await Template.findOne({
       _id: templateId,
-      accountId
+      accountId: account ? String(account._id) : accountId
     });
 
     if (!template) {
