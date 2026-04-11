@@ -51,103 +51,72 @@ export function WhatsAppOAuthSetup({
     }
   }, []);
 
-  // 🔥 ATTACH MESSAGE LISTENER BEFORE FB.login
+  // 🔥 ATTACH MESSAGE LISTENER ONCE (STAYS ALIVE ALWAYS)
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      console.log('📩 RAW EVENT:', event);
-
-      // ✅ Allow BOTH origins (facebook.com and web.facebook.com)
+      // ✅ Allow BOTH origins
       if (
         event.origin !== 'https://www.facebook.com' &&
         event.origin !== 'https://web.facebook.com'
       ) {
-        console.log('❌ Wrong origin, ignoring:', event.origin);
         return;
       }
 
       let data;
       try {
-        // ✅ Handle BOTH string and object data
         data = typeof event.data === 'string'
           ? JSON.parse(event.data)
           : event.data;
       } catch (err) {
-        console.log('❌ Not valid JSON, skipping');
         return;
       }
 
-      console.log('✅ PARSED:', data);
-
       if (data?.type === 'WA_EMBEDDED_SIGNUP') {
-        console.log('🔥 EMBED EVENT:', data.event);
+        console.log('🔥 EVENT:', data.event);
 
         if (data.event === 'FINISH') {
-          console.log('🚀 FINISH RECEIVED');
+          console.log('✅ FINISH RECEIVED', data);
 
-          // ✅ Extract from nested data.data object
           const wabaId = data?.data?.waba_id;
           const phoneNumberId = data?.data?.phone_number_id;
-          const phoneNumber = data?.data?.phone_number;
+          const phoneNumber = data?.data?.phone_number || 'unknown';
 
-          console.log('✅ Extracted values:');
-          console.log('  wabaId:', wabaId);
-          console.log('  phoneNumberId:', phoneNumberId);
-          console.log('  phoneNumber:', phoneNumber);
+          console.log('Extracted:', { wabaId, phoneNumberId, phoneNumber });
 
           if (wabaId && phoneNumberId) {
-            setSetupStep('connecting');
-            console.log('🚀 Calling connect endpoint...');
-
+            // Call backend to register
             try {
               const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
-              console.log('Backend URL:', backendUrl);
+              
+              setSetupStep('connecting');
 
               const response = await axios.post(
                 backendUrl,
-                {
-                  wabaId,
-                  phoneNumberId,
-                  phoneNumber
-                },
-                {
-                  headers: {
-                    Authorization: `Bearer ${token}`
-                  }
-                }
+                { wabaId, phoneNumberId, phoneNumber },
+                { headers: { Authorization: `Bearer ${token}` } }
               );
 
-              console.log('✅ Backend response:', response.data);
-
               if (response.data?.success) {
-                console.log('🎉 CONNECTED! Phone registered and saved');
+                console.log('🎉 CONNECTED');
                 setSetupStep('connected');
-                setTimeout(() => {
-                  onConnectionUpdate();
-                }, 1500);
+                setTimeout(() => onConnectionUpdate(), 1500);
               } else {
-                console.error('❌ Backend returned error:', response.data);
                 setSetupStep('idle');
               }
             } catch (error: any) {
-              console.error('❌ Connect call failed:', error.response?.data || error.message);
+              console.error('Backend error:', error.response?.data || error.message);
               setSetupStep('idle');
             }
-          } else {
-            console.error('❌ Missing required data:');
-            console.error('  wabaId:', !!wabaId);
-            console.error('  phoneNumberId:', !!phoneNumberId);
-            setSetupStep('idle');
           }
         }
       }
     };
 
     window.addEventListener('message', handleMessage);
-    console.log('✅ Message listener attached');
+    console.log('✅ Listener attached (ONCE)');
 
     return () => {
       window.removeEventListener('message', handleMessage);
-      console.log('✅ Message listener removed');
     };
   }, [token, onConnectionUpdate]);
 
