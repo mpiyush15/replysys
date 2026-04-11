@@ -11,6 +11,7 @@ const { isolateByAccount } = require('../middlewares/isolateByAccount');
 const oauthRoutes = require('./oauthRoutes');
 const messageRoutes = require('./messageRoutes');
 const contactRoutes = require('./contactRoutes');
+const templateRoutes = require('./templateRoutes');
 
 const router = express.Router();
 
@@ -26,6 +27,9 @@ router.use('/messages', messageRoutes);
 
 // Mount contact routes
 router.use('/contacts', contactRoutes);
+
+// Mount template routes
+router.use('/templates', templateRoutes);
 
 // ==========================================
 // DASHBOARD

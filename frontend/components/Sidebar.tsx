@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdDashboard, MdGroup, MdBusiness, MdAssessment, MdSettings, MdLogout, MdMenu, MdClose, MdPerson } from 'react-icons/md';
+import { MdDashboard, MdGroup, MdBusiness, MdAssessment, MdSettings, MdLogout, MdMenu, MdClose, MdPerson, MdArticle } from 'react-icons/md';
 import { GrTask, GrChat, GrUserSettings } from 'react-icons/gr';
 import { useState } from 'react';
 
@@ -26,6 +26,7 @@ export function Sidebar({ onSettingsClick }: SidebarProps) {
     { label: 'My Activities', href: '/client/activities', icon: GrTask },
     { label: 'Messages', href: '/client/dashboard?tab=messages', icon: GrChat },
     { label: 'Contacts', href: '/client/contacts', icon: MdPerson },
+    { label: 'Templates', href: '/client/templates', icon: MdArticle },
     { label: 'Settings', href: '/client/settings', icon: MdSettings },
     { label: 'Profile', href: '/client/profile', icon: GrUserSettings },
   ];
