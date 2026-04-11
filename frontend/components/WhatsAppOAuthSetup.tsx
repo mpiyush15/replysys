@@ -51,26 +51,45 @@ export function WhatsAppOAuthSetup({
 
       // ✅ Listen for postMessage from Embedded Signup
       const handleMessage = async (event: MessageEvent) => {
-        if (event.origin !== 'https://www.facebook.com') return;
+        console.log('📨 Message received from origin:', event.origin);
+        
+        if (event.origin !== 'https://www.facebook.com') {
+          console.log('❌ Wrong origin, ignoring');
+          return;
+        }
 
         try {
           const data = event.data;
+          console.log('📦 Message data:', data);
+          console.log('📦 Message type:', data?.type);
           
           if (data.type === 'WA_EMBEDDED_SIGNUP') {
-            console.log('✅ Embedded Signup Complete:', data);
+            console.log('✅ WA_EMBEDDED_SIGNUP detected');
+            console.log('Full data object:', JSON.stringify(data, null, 2));
             
             const wabaId = data.data?.waba_id;
             const phoneNumberId = data.data?.phone_number_id;
             const phoneNumber = data.data?.phone_number;
             const code = data.data?.code;
 
+            console.log('Extracted values:');
+            console.log('  wabaId:', wabaId);
+            console.log('  phoneNumberId:', phoneNumberId);
+            console.log('  phoneNumber:', phoneNumber);
+            console.log('  code:', code?.substring(0, 10) + '...');
+            console.log('  token:', token ? 'YES' : 'NO (⚠️ THIS IS THE PROBLEM!)');
+
             if (code) {
               setSetupStep('connecting');
+              console.log('✅ State set to connecting');
 
               try {
-                // Send code to backend
+                console.log('🔄 Sending OAuth code to backend...');
+                const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`;
+                console.log('Backend URL:', backendUrl);
+
                 const response = await axios.post(
-                  `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp`,
+                  backendUrl,
                   { 
                     code,
                     wabaId,
@@ -84,24 +103,36 @@ export function WhatsAppOAuthSetup({
                   }
                 );
 
-                console.log('✅ Backend saved OAuth:', response.data);
+                console.log('✅ Backend response:', response.data);
                 
                 // Start polling for webhook
                 setSetupStep('polling');
                 setPollCount(0);
+                console.log('✅ State set to polling');
               } catch (error: any) {
-                console.error('❌ Setup failed:', error);
+                console.error('❌ Backend call failed');
+                console.error('Status:', error.response?.status);
+                console.error('Data:', error.response?.data);
+                console.error('Message:', error.message);
                 setSetupStep('idle');
               }
+            } else {
+              console.error('❌ No code in data!');
             }
+          } else {
+            console.log('⚠️ Different message type (not WA_EMBEDDED_SIGNUP):', data.type);
           }
         } catch (err) {
-          console.error('Error parsing message:', err);
+          console.error('❌ Error parsing message:', err);
         }
       };
 
       window.addEventListener('message', handleMessage);
-      return () => window.removeEventListener('message', handleMessage);
+      console.log('✅ Message listener attached');
+      return () => {
+        window.removeEventListener('message', handleMessage);
+        console.log('✅ Message listener removed');
+      };
     }
   }, [token]);
 
