@@ -54,77 +54,49 @@ export function WhatsAppOAuthSetup({
   // 🔥 ATTACH MESSAGE LISTENER ONCE (STAYS ALIVE ALWAYS)
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      // LOG EVERYTHING to diagnose
-      console.log('📨 postMessage received:', {
-        origin: event.origin,
-        type: event.data?.type,
-        dataKeys: Object.keys(event.data || {})
-      });
-
-      // ✅ Allow BOTH origins
-      if (
-        event.origin !== 'https://www.facebook.com' &&
-        event.origin !== 'https://web.facebook.com'
-      ) {
-        console.log('⚠️ Origin check: allowing anyway for debugging');
-        // Don't return - let's see what's being sent
-      }
-
       let data;
       try {
         data = typeof event.data === 'string'
           ? JSON.parse(event.data)
           : event.data;
       } catch (err) {
-        console.log('⚠️ Not JSON:', event.data);
         return;
       }
 
-      console.log('📦 Parsed data:', data);
+      // ✅ FINISH event
+      if (data?.type === 'WA_EMBEDDED_SIGNUP' && data?.event === 'FINISH') {
+        console.log('✅ FINISH EVENT DETECTED');
 
-      if (data?.type === 'WA_EMBEDDED_SIGNUP') {
-        console.log('🔥 EVENT:', data.event);
+        const wabaId = data?.data?.waba_id;
+        const phoneNumberId = data?.data?.phone_number_id;
+        const phoneNumber = data?.data?.phone_number || 'unknown';
 
-        if (data.event === 'FINISH') {
-          console.log('✅ FINISH RECEIVED', data);
+        if (wabaId && phoneNumberId && token) {
+          setSetupStep('connecting');
 
-          const wabaId = data?.data?.waba_id;
-          const phoneNumberId = data?.data?.phone_number_id;
-          const phoneNumber = data?.data?.phone_number || 'unknown';
+          try {
+            const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
+            
+            const response = await axios.post(
+              backendUrl,
+              { wabaId, phoneNumberId, phoneNumber },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
 
-          console.log('Extracted:', { wabaId, phoneNumberId, phoneNumber });
-
-          if (wabaId && phoneNumberId) {
-            try {
-              const backendUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/oauth/whatsapp/connect`;
-              
-              setSetupStep('connecting');
-
-              const response = await axios.post(
-                backendUrl,
-                { wabaId, phoneNumberId, phoneNumber },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-
-              if (response.data?.success) {
-                console.log('🎉 CONNECTED');
-                setSetupStep('connected');
-                setTimeout(() => onConnectionUpdate(), 1500);
-              } else {
-                setSetupStep('idle');
-              }
-            } catch (error: any) {
-              console.error('Backend error:', error.response?.data || error.message);
-              setSetupStep('idle');
+            if (response.data?.success) {
+              console.log('🎉 REGISTERED');
+              setSetupStep('connected');
+              setTimeout(() => onConnectionUpdate(), 1500);
             }
+          } catch (error: any) {
+            console.error('Error:', error.message);
+            setSetupStep('idle');
           }
         }
       }
     };
 
     window.addEventListener('message', handleMessage);
-    console.log('✅ Listener attached (ONCE)');
-
     return () => {
       window.removeEventListener('message', handleMessage);
     };
@@ -182,26 +154,24 @@ export function WhatsAppOAuthSetup({
   const handleStartOAuth = () => {
     if (typeof window !== 'undefined' && (window as any).FB) {
       setSetupStep('connecting');
-      console.log('🚀 Starting FB.login with Embedded Signup...');
+      console.log('🚀 Starting FB.login...');
 
       (window as any).FB.login(
         function (response: any) {
-          console.log('✅ FB.login response:', response);
-
-          if (response.authResponse) {
-            console.log('✅ Auth success - waiting for FINISH event');
-          } else {
-            console.error('❌ FB.login failed:', response);
-            setSetupStep('idle');
+          console.log('✅ FB.login response:', response?.authResponse?.status);
+          
+          // Start polling for phone registration
+          if (response?.authResponse) {
+            console.log('🔄 Starting auto-poll for phone...');
+            setSetupStep('polling');
+            setPollCount(0);
           }
         },
         {
           config_id: '1239299391737840',
           response_type: 'code',
           override_default_response_type: true,
-          extras: {
-            setup: {}
-          }
+          extras: { setup: {} }
         }
       );
     } else {
