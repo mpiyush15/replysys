@@ -65,7 +65,7 @@ export default function MessagesPage() {
     try {
       setLoadingConversations(true);
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/conversations`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/messages/conversations`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }
@@ -128,12 +128,10 @@ export default function MessagesPage() {
     try {
       setSendingMessage(true);
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/messages/send`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/client/messages/conversations/${selectedConversation._id}/messages`,
         {
-          conversationId: selectedConversation._id,
-          phoneNumberId: selectedConversation.contactPhone,
-          to: selectedConversation.contactPhone,
-          message: messageInput.trim()
+          message: messageInput.trim(),
+          phoneNumberId: selectedConversation.contactPhone
         },
         {
           headers: { Authorization: `Bearer ${token}` }
