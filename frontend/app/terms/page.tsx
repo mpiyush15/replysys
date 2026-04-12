@@ -11,30 +11,30 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. Agreement to Terms</h2>
             <p className="mb-4">
-              By accessing and using ReplySystem ("Service"), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+              By accessing and using ReplySystem (&quot;Service&quot;), you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">2. Use License</h2>
             <p className="mb-4">
-              Permission is granted to temporarily download one copy of the materials (information or software) on ReplySystem for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:
+              Permission is granted to temporarily download one copy of the materials on ReplySystem for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:
             </p>
             <ul className="list-disc pl-6 space-y-2 mb-4">
               <li>Modify or copy the materials</li>
               <li>Use the materials for any commercial purpose or for any public display</li>
-              <li>Attempt to decompile or reverse engineer any software contained</li>
+              <li>Attempt to decompile or reverse engineer any software</li>
               <li>Remove any copyright or other proprietary notations</li>
-              <li>Transfer the materials to another person or "mirror" the materials on any other server</li>
-              <li>Violate any applicable laws or regulations</li>
-              <li>Engage in any conduct that restricts or inhibits anyone's use or enjoyment of the Service</li>
+              <li>Transfer the materials to another person or mirror the materials on any other server</li>
+              <li>Violated any applicable laws or regulations</li>
+              <li>Engaged in any conduct that restricts or inhibits anyone from using or enjoying the Service</li>
             </ul>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">3. Disclaimer</h2>
             <p className="mb-4">
-              The materials on ReplySystem are provided on an 'as is' basis. ReplySystem makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
+              The materials on ReplySystem are provided on an as is basis. ReplySystem makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
             </p>
           </section>
 
@@ -62,7 +62,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">7. Modifications</h2>
             <p className="mb-4">
-              ReplySystem may revise these terms of service for its website at any time without notice. By using this website, you are agreeing to be bound by the then current version of these terms of service.
+              ReplySystem may revise these terms of service for its website at any time without notice. By using this website, you are agreeing to be bound by the then current version of these terms.
             </p>
           </section>
 
@@ -112,7 +112,7 @@ export default function TermsOfService() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">12. WhatsApp Integration</h2>
             <p className="mb-4">
-              By using WhatsApp integration through ReplySystem, you agree to comply with Meta/Facebook's WhatsApp Business API Terms of Service. You are solely responsible for obtaining necessary permissions from message recipients and complying with applicable messaging regulations.
+              By using WhatsApp integration through ReplySystem, you agree to comply with Meta and Facebook WhatsApp Business API Terms of Service. You are solely responsible for obtaining necessary permissions from message recipients and complying with applicable messaging regulations.
             </p>
           </section>
 

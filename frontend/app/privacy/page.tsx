@@ -11,7 +11,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. Introduction</h2>
             <p className="mb-4">
-              Welcome to ReplySystem ("we," "us," "our," or "Company"). We are committed to protecting your privacy and ensuring you have a positive experience on our platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.
+              Welcome to ReplySystem (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;, or &quot;Company&quot;). We are committed to protecting your privacy and ensuring you have a positive experience on our platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.
             </p>
           </section>
 
@@ -55,7 +55,7 @@ export default function PrivacyPolicy() {
               <li>Secure password hashing and storage</li>
             </ul>
             <p className="mb-4">
-              However, no method of transmission over the Internet is 100% secure. While we strive to protect your information, we cannot guarantee absolute security.
+              However, no method of transmission over the Internet is 100&percnt; secure. While we strive to protect your information, we cannot guarantee absolute security.
             </p>
           </section>
 

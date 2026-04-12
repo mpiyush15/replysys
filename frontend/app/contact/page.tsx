@@ -7,7 +7,7 @@ export default function Contact() {
         <div className="bg-white rounded-lg shadow-md p-8 mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Contact Us</h1>
           <p className="text-gray-600 mb-8">
-            We'd love to hear from you! Whether you have questions about our platform, need support, or want to discuss a partnership, feel free to reach out.
+            We would love to hear from you! Whether you have questions about our platform, need support, or want to discuss a partnership, feel free to reach out.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
@@ -17,7 +17,7 @@ export default function Contact() {
 
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">📧 Email</h3>
-                <p className="text-gray-600 mb-1">
+                <p className="text-gray-600">
                   <strong>General Inquiries:</strong> info@replysys.com
                 </p>
                 <p className="text-gray-600 mb-1">
@@ -60,7 +60,7 @@ export default function Contact() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">How do I create an account?</h3>
                 <p className="text-gray-600">
-                  Visit our platform and click "Sign Up". Fill in your details and follow the verification process to get started.
+                  Visit our platform and click Sign Up. Fill in your details and follow the verification process to get started.
                 </p>
               </div>
 
@@ -163,8 +163,8 @@ export default function Contact() {
                 Send Message
               </button>
             </form>
-            <p className="text-gray-600 text-sm mt-4">
-              * Required fields. We'll get back to you as soon as possible.
+            <p className="text-gray-600 text-sm">
+              * Required fields. We will get back to you as soon as possible.
             </p>
           </div>
         </div>
@@ -178,7 +178,7 @@ export default function Contact() {
               Check our comprehensive guides and documentation
             </p>
             <a href="#" className="text-blue-600 hover:text-blue-800 text-sm font-semibold">
-              View Docs →
+              View Docs
             </a>
           </div>
 
