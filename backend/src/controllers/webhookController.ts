@@ -161,6 +161,12 @@ export const handleWebhook = async (req: Request, res: Response) => {
     // Acknowledge receipt immediately (CRITICAL for Meta)
     res.sendStatus(200);
 
+    // Return early if not a whatsapp_business_account object
+    if (body.object !== 'whatsapp_business_account') {
+      console.log('⚠️ Webhook received for non-WhatsApp object:', body.object);
+      return;
+    }
+
     // Process webhook data asynchronously
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry) {
